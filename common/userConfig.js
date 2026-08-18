@@ -28,6 +28,7 @@ const ROUTE_SEGMENTS = [
   "configure",
   "verify",
   "README.md",
+  "logo.png",
 ];
 
 const redact = (url) => {

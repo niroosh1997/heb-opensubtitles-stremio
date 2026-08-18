@@ -136,28 +136,20 @@ describe("formatSubs", function () {
     );
   });
 
-  it("should leave the port out of the url when served over https", function () {
-    // Anything on https is behind a tls terminator on the standard port, so a
-    // port in the url gives Stremio something it cannot reach: the subtitles
-    // list fine and then never download.
+  it("should build the url from the addon's own base url", function () {
     const subs = proxyquire("../../../routes/subs", {
       "../clients/openSubtitles": { search: sinon.stub().resolves([]) },
       "../common/logger": { info() {}, debug() {}, error() {} },
-      config: {
-        get: (key) =>
-          ({ PORT: 3000, ssl: true, HOSTNAME: "addon.example.com" }[key]),
-        util: { getEnv: () => "development" },
-      },
+      "../common/addonUrl": { addonBaseUrl: () => "https://addon.example.com" },
     });
 
     subs.formatSubs(requestWith(undefined), res);
 
     const { subtitles } = res.send.firstCall.args[0];
-    assert.ok(
-      !subtitles[0].url.includes(":3000"),
-      `Port must not appear in an https url, got: ${subtitles[0].url}`
+    assert.strictEqual(
+      subtitles[0].url,
+      `https://addon.example.com/${USER_CONFIG_SEGMENT}/srt/111.srt`
     );
-    assert.ok(subtitles[0].url.startsWith("https://addon.example.com/"));
   });
 
   it("should label the subtitles and their language", function () {

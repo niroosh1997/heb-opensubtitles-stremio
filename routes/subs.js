@@ -1,6 +1,7 @@
 const openSubtitles = require("../clients/openSubtitles");
 const { type } = require("../common/mediaTypes");
 const { getOrFetch } = require("../common/subsCache");
+const { addonBaseUrl } = require("../common/addonUrl");
 const logger = require("../common/logger");
 const config = require("config");
 const { distance } = require("fastest-levenshtein");
@@ -106,22 +107,8 @@ const formatSubs = (req, res) => {
   res.send(stremioSubs);
 };
 
-const formatSrtUrl = (userConfig, fileId) => {
-  const PORT = config.get("PORT");
-  const HTTP = config.get("ssl") ? "https" : "http";
-  const HOSTNAME = config.get("HOSTNAME");
-
-  // The port belongs in the url only when the addon is reached directly on it,
-  // which is local development over http. Anything served over https is behind
-  // something terminating tls on the standard port, whether that is beamup, a
-  // tunnel or anything else, and appending the port there produces urls Stremio
-  // cannot reach.
-  const addonUrl = `${HTTP}://${HOSTNAME}${
-    config.get("ssl") ? "" : `:${PORT}`
-  }`;
-
-  return `${addonUrl}/${userConfig}/srt/${fileId}.srt`;
-};
+const formatSrtUrl = (userConfig, fileId) =>
+  `${addonBaseUrl()}/${userConfig}/srt/${fileId}.srt`;
 
 const sortSubsByFilename = (stremioSubsArray, titleFilename) => {
   if (!titleFilename) {

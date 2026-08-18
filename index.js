@@ -60,6 +60,11 @@ addon.get("/configure", landing);
 // The configure page checks the credentials here before handing out a link.
 addon.post("/verify", verifyCredentials);
 
+addon.get("/logo.png", (req, res) => {
+  res.set("Cache-Control", "public, max-age=86400");
+  res.sendFile(`${__dirname}/assets/logo.png`);
+});
+
 //Addon's readme request
 addon.get("/README.md", (req, res) => {
   res.sendFile(`${__dirname}/README.md`);
