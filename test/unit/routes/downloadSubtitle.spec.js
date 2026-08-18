@@ -5,8 +5,10 @@ const proxyquire = require("proxyquire").noCallThru();
 const SRT = "1\n00:00:01,000 --> 00:00:04,000\nשלום עולם\n";
 const SESSION = { token: "jwt", host: "api.opensubtitles.com" };
 const USER_CONFIG = { username: "viewer", password: "hunter2" };
+const OTHER_USER_CONFIG = { username: "other", password: "swordfish" };
+const FAILURE_TTL = 200;
 
-const load = (overrides = {}) => {
+const load = (overrides = {}, configOverrides = {}) => {
   const client = {
     login: sinon.stub().resolves(SESSION),
     requestDownloadLink: sinon.stub().resolves("https://dl/sub.srt"),
@@ -23,14 +25,31 @@ const load = (overrides = {}) => {
         ({
           "subtitleFileCache.maxBytes": 33554432,
           "subtitleFileCache.ttlMs": 21600000,
+          ...configOverrides,
         }[key]),
     },
     "./logger": { debug: sinon.spy() },
   });
 
+  const downloadFailureCache = proxyquire(
+    "../../../common/downloadFailureCache",
+    {
+      config: {
+        get: (key) =>
+          ({
+            "downloadFailureCache.maxEntries": 500,
+            "downloadFailureCache.ttlMs": FAILURE_TTL,
+            ...configOverrides,
+          }[key]),
+      },
+      "./logger": { debug: sinon.spy() },
+    }
+  );
+
   const { downloadSubtitle } = proxyquire("../../../routes/downloadSubtitle", {
     "../clients/openSubtitles": client,
     "../common/subtitleFileCache": subtitleFileCache,
+    "../common/downloadFailureCache": downloadFailureCache,
     "../common/logger": logger,
   });
 
@@ -127,6 +146,24 @@ describe("downloadSubtitle", function () {
     );
   });
 
+  it("should tell an unusable answer apart by its code, not its wording", async function () {
+    // The branch used to match the phrase "valid SRT" in the message, so
+    // rewording it moved an unusable answer to the generic failure quietly.
+    const { downloadSubtitle, logger } = load({
+      fetchSubtitleFile: sinon.stub().resolves("<html>nope</html>"),
+    });
+
+    await downloadSubtitle(req, makeRes());
+
+    const [err, meta] = logger.error.firstCall.args;
+    assert.strictEqual(err.code, "INVALID_SRT");
+    assert.strictEqual(
+      meta.description,
+      "OpenSubtitles did not return a valid SRT file.",
+      "An unusable answer must not be reported as a failed download"
+    );
+  });
+
   it("should forget the session and answer 401 when the credentials are refused", async function () {
     const rejection = Object.assign(new Error("unauthorized"), {
       response: { status: 401 },
@@ -183,5 +220,117 @@ describe("downloadSubtitle", function () {
       logger.error.args,
     ]);
     assert.ok(!logged.includes("hunter2"), `Password leaked: ${logged}`);
+  });
+});
+
+const quotaSpent = () =>
+  Object.assign(new Error("no quota"), { response: { status: 406 } });
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Measured from a phone: a subtitle that fails is asked for around sixteen
+// times in three seconds. The file cache keeps no failed download, correctly,
+// which left every one of those retries spending another call on OpenSubtitles.
+describe("downloadSubtitle after a failed download", function () {
+  it("should stop asking OpenSubtitles once a download has failed", async function () {
+    const { downloadSubtitle, client } = load({
+      requestDownloadLink: sinon.stub().rejects(quotaSpent()),
+    });
+
+    await downloadSubtitle(req, makeRes());
+    const res = makeRes();
+    await downloadSubtitle(req, res);
+
+    assert.strictEqual(
+      client.requestDownloadLink.callCount,
+      1,
+      "The retry must be answered without OpenSubtitles"
+    );
+    assert.ok(res.status.calledWith(429), "The retry gets the same answer");
+    assert.strictEqual(headerSetTo(res, "Cache-Control"), "no-store");
+  });
+
+  it("should leave another account's quota alone", async function () {
+    // Keyed on the file id alone, the first user to run out of downloads would
+    // refuse that subtitle to everyone else who still has quota.
+    const requestDownloadLink = sinon.stub();
+    requestDownloadLink.onFirstCall().rejects(quotaSpent());
+    requestDownloadLink.onSecondCall().resolves("https://dl/sub.srt");
+    const { downloadSubtitle, client } = load({ requestDownloadLink });
+
+    await downloadSubtitle(req, makeRes());
+    const res = makeRes();
+    await downloadSubtitle({ ...req, userConfig: OTHER_USER_CONFIG }, res);
+
+    assert.strictEqual(client.requestDownloadLink.callCount, 2);
+    assert.ok(
+      Buffer.isBuffer(res.send.firstCall.args[0]),
+      "A user with quota left must still get the subtitle"
+    );
+  });
+
+  it("should serve a file that has since been downloaded successfully", async function () {
+    // The memory is consulted only when the file cache misses, so a subtitle
+    // someone else has fetched in the meantime is served rather than refused.
+    const requestDownloadLink = sinon.stub();
+    requestDownloadLink.onFirstCall().rejects(quotaSpent());
+    requestDownloadLink.onSecondCall().resolves("https://dl/sub.srt");
+    const { downloadSubtitle, client } = load({ requestDownloadLink });
+
+    await downloadSubtitle(req, makeRes());
+    await downloadSubtitle(
+      { ...req, userConfig: OTHER_USER_CONFIG },
+      makeRes()
+    );
+    const res = makeRes();
+    await downloadSubtitle(req, res);
+
+    assert.strictEqual(client.requestDownloadLink.callCount, 2);
+    const [buffer] = res.send.firstCall.args;
+    assert.ok(Buffer.isBuffer(buffer), "A cached file is not a failure");
+    assert.strictEqual(buffer.toString("utf8"), SRT);
+  });
+
+  it("should forget a failure the moment the file is served", async function () {
+    // The cache is sized so the fourth request evicts the file, which puts the
+    // last request back on the download path: a failure remembered past the
+    // success that followed it would refuse a file known to work.
+    const requestDownloadLink = sinon.stub().resolves("https://dl/sub.srt");
+    requestDownloadLink.onFirstCall().rejects(quotaSpent());
+    const { downloadSubtitle } = load(
+      { requestDownloadLink },
+      { "subtitleFileCache.maxBytes": Buffer.byteLength(SRT) + 10 }
+    );
+
+    await downloadSubtitle(req, makeRes());
+    await downloadSubtitle(
+      { ...req, userConfig: OTHER_USER_CONFIG },
+      makeRes()
+    );
+    await downloadSubtitle(req, makeRes());
+    await downloadSubtitle({ ...req, params: { fileId: "222" } }, makeRes());
+    const res = makeRes();
+    await downloadSubtitle(req, res);
+
+    const [buffer] = res.send.firstCall.args;
+    assert.ok(Buffer.isBuffer(buffer), "The file works and must be served");
+    assert.strictEqual(buffer.toString("utf8"), SRT);
+  });
+
+  it("should try again once the memory of the failure expires", async function () {
+    // A subtitle that failed once must not stay unavailable: the memory is
+    // there to absorb a burst of retries, not to take the file away.
+    const requestDownloadLink = sinon.stub();
+    requestDownloadLink.onFirstCall().rejects(quotaSpent());
+    requestDownloadLink.onSecondCall().resolves("https://dl/sub.srt");
+    const { downloadSubtitle, client } = load({ requestDownloadLink });
+
+    await downloadSubtitle(req, makeRes());
+    await sleep(FAILURE_TTL * 2);
+    const res = makeRes();
+    await downloadSubtitle(req, res);
+
+    assert.strictEqual(client.requestDownloadLink.callCount, 2);
+    assert.strictEqual(res.send.firstCall.args[0].toString("utf8"), SRT);
   });
 });
