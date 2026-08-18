@@ -128,6 +128,12 @@ const downloadSubtitle = async (req, res) => {
       return;
     }
 
+    // An exhausted quota is a 406, not the 429 one would expect: their error
+    // codes page lists the quota body under 406 and keeps 429 for the
+    // per-second throttle, and their own Kodi addon splits the two the same
+    // way. Written down because the only way to see it first hand is to spend
+    // somebody's whole day of downloads.
+    // https://opensubtitles.stoplight.io/docs/opensubtitles-api/12f131ce12132-error-codes
     if (status === 406) {
       respondWithError(err, "The daily download quota is used up.", 429);
       return;
