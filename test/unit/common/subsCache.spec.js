@@ -2,8 +2,12 @@ const assert = require("assert");
 const sinon = require("sinon");
 const proxyquire = require("proxyquire").noCallThru();
 
-const FOUND_TTL = 60000;
-const EMPTY_TTL = 5000;
+const FOUND_TTL = 200;
+const EMPTY_TTL = 60;
+
+// Comfortably inside or past a ttl, so a slow machine cannot flip the result.
+const WELL_WITHIN = (ttl) => Math.floor(ttl / 4);
+const WELL_PAST = (ttl) => ttl * 2;
 
 const SUBS = [
   { id: "SUB1", subName: "Freies.Land.2019.D.BDRip.1.46Gb.MegaPeer.avi.srt" },
@@ -286,24 +290,26 @@ describe("subsCache getOrFetch", function () {
   });
 });
 
+// These use real, very short ttls rather than a faked clock. lru-cache reads
+// its clock once when the module loads and keeps that reference, so whether a
+// fake clock reaches it depends on module load order, which differs by Node
+// version: faking Date worked on Node 18 and not from Node 20 on, where it
+// picks performance.now() instead. Waiting a few real milliseconds is slower
+// but behaves the same everywhere.
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe("subsCache getOrFetch expiry", function () {
   let getOrFetch;
-  let clock;
 
   beforeEach(function () {
-    clock = sinon.useFakeTimers();
     ({ getOrFetch } = loadCache());
-  });
-
-  afterEach(function () {
-    clock.restore();
   });
 
   it("should keep a found list for the whole found ttl", async function () {
     const fetchSubs = countingFetch();
 
     await getOrFetch(movie(), fetchSubs);
-    clock.tick(FOUND_TTL - 1);
+    await sleep(WELL_WITHIN(FOUND_TTL));
     await getOrFetch(movie(), fetchSubs);
 
     assert.strictEqual(
@@ -317,7 +323,7 @@ describe("subsCache getOrFetch expiry", function () {
     const fetchSubs = countingFetch();
 
     await getOrFetch(movie(), fetchSubs);
-    clock.tick(FOUND_TTL + 1);
+    await sleep(WELL_PAST(FOUND_TTL));
     await getOrFetch(movie(), fetchSubs);
 
     assert.strictEqual(fetchSubs.callCount, 2);
@@ -327,7 +333,7 @@ describe("subsCache getOrFetch expiry", function () {
     const fetchSubs = countingFetch();
 
     await getOrFetch(movie(), fetchSubs);
-    clock.tick(EMPTY_TTL + 1);
+    await sleep(WELL_PAST(EMPTY_TTL));
     await getOrFetch(movie(), fetchSubs);
 
     assert.strictEqual(
@@ -341,7 +347,7 @@ describe("subsCache getOrFetch expiry", function () {
     const fetchSubs = countingFetch([]);
 
     await getOrFetch(episode(), fetchSubs);
-    clock.tick(EMPTY_TTL - 1);
+    await sleep(WELL_WITHIN(EMPTY_TTL));
     await getOrFetch(episode(), fetchSubs);
 
     assert.strictEqual(
@@ -355,7 +361,7 @@ describe("subsCache getOrFetch expiry", function () {
     const fetchSubs = countingFetch([]);
 
     await getOrFetch(episode(), fetchSubs);
-    clock.tick(EMPTY_TTL + 1);
+    await sleep(WELL_PAST(EMPTY_TTL));
     await getOrFetch(episode(), fetchSubs);
 
     assert.strictEqual(fetchSubs.callCount, 2);
