@@ -17,12 +17,39 @@ const sessions = new LRUCache({
   ttl: Number(config.get("openSubtitles.sessionTtlMs")),
 });
 
-const api = (host) =>
-  axios.create({
+// Axios reports only "Request failed with status code N". OpenSubtitles puts
+// the reason in the response body, so it is attached to the error where the
+// logs can reach it.
+const withResponseBody = (err) => {
+  const body = err.response?.data;
+
+  if (body) {
+    err.message = `${err.message}: ${
+      typeof body === "string" ? body.slice(0, 200) : JSON.stringify(body)
+    }`;
+  }
+
+  throw err;
+};
+
+const api = (host) => {
+  const instance = axios.create({
     baseURL: `https://${host}/api/v1`,
     timeout: TIMEOUT_MS,
-    headers: { "Api-Key": API_KEY, "User-Agent": USER_AGENT },
+    headers: {
+      "Api-Key": API_KEY,
+      "User-Agent": USER_AGENT,
+      // Sent explicitly because axios defaults to
+      // "application/json, text/plain, */*", which OpenSubtitles' edge answers
+      // with a 503 html page instead of the api's json.
+      Accept: "application/json",
+    },
   });
+
+  instance.interceptors.response.use((res) => res, withResponseBody);
+
+  return instance;
+};
 
 // OpenSubtitles wants the imdb id as a plain integer: no tt prefix and no
 // leading zeroes, or the request is redirected.
