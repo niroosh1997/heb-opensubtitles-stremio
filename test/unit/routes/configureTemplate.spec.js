@@ -98,4 +98,26 @@ describe("manifest logo and contact", function () {
     const maxAge = Number(value.match(/max-age=(\d+)/)[1]);
     assert.ok(maxAge <= 900, `Manifest cached too long: ${value}`);
   });
+
+  it("should carry the ownership signature on both manifests", function () {
+    // stremio-addons.net reads this to show the addon as claimed. The
+    // configured manifest is a copy of the unconfigured one, so it is worth
+    // checking the copy did not drop it.
+    const { serveManifest } = load();
+
+    for (const req of [{}, { userConfig: { username: "viewer" } }]) {
+      const res = { send: sinon.spy(), set: sinon.spy() };
+      serveManifest(req, res);
+
+      const { stremioAddonsConfig } = res.send.firstCall.args[0];
+      assert.strictEqual(
+        stremioAddonsConfig.issuer,
+        "https://stremio-addons.net"
+      );
+      assert.ok(
+        stremioAddonsConfig.signature.length > 50,
+        "The signature must be carried whole"
+      );
+    }
+  });
 });

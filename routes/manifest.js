@@ -32,6 +32,14 @@ const MANIFEST = {
   description:
     "An unofficial Stremio addon for Hebrew subtitles from OpenSubtitles. Each user signs in with their own account, so downloads count against their own daily quota.",
   config: CONFIG_FIELDS,
+  // Issued by stremio-addons.net, this is what lets them show the addon as
+  // claimed rather than unverified. It is a signature over the addon's
+  // identity, meant to be published in the manifest, not a secret.
+  stremioAddonsConfig: {
+    issuer: "https://stremio-addons.net",
+    signature:
+      "eyJhbGciOiJkaXIiLCJlbmMiOiJBMTI4Q0JDLUhTMjU2In0..lTm0-5_IpsRKHqf11bPj3w.AXsvUOrfUpbIskn9l__lsVVqgPBm2AfL0RsGcMwvNk8FT2oOjewLLlfdOr6OoK1g-s4HG-yXof6vLjj-GJM-OnyQnhBvWJmmUVZH-SQ5QowVvSokytB78W2aHGJjHN_s.uaojIUdtQYTJ4PQ_51pbew",
+  },
   behaviorHints: { configurable: true, configurationRequired: true },
 };
 
