@@ -29,5 +29,6 @@
   "downloadFailureCache": {
     "maxEntries": "DOWNLOAD_FAILURE_CACHE_MAX_ENTRIES",
     "ttlMs": "DOWNLOAD_FAILURE_CACHE_TTL_MS"
-  }
+  },
+  "manifestCacheMaxAgeSeconds": "MANIFEST_CACHE_MAX_AGE_SECONDS"
 }
