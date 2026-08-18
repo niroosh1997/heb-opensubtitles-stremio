@@ -60,7 +60,13 @@ describe("userConfig redact", function () {
   });
 
   it("should leave the unconfigured routes alone", function () {
-    for (const url of ["/manifest.json", "/configure", "/README.md", "/"]) {
+    for (const url of [
+      "/manifest.json",
+      "/configure",
+      "/verify",
+      "/README.md",
+      "/",
+    ]) {
       assert.strictEqual(redact(url), url);
     }
   });

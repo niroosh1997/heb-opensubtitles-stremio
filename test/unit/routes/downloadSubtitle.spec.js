@@ -87,7 +87,7 @@ describe("downloadSubtitle", function () {
 
     await downloadSubtitle(req, res);
 
-    assert.ok(client.forgetSession.calledWith("viewer"));
+    assert.deepStrictEqual(client.forgetSession.firstCall.args[0], USER_CONFIG);
     assert.ok(res.status.calledWith(401));
   });
 

@@ -26,6 +26,7 @@ const ROUTE_SEGMENTS = [
   "subtitles",
   "srt",
   "configure",
+  "verify",
   "README.md",
 ];
 
