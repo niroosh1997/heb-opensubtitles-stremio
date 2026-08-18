@@ -35,7 +35,33 @@ jobs:
           git config user.name "github-cd"
           git config user.email "cd@github.com"
           git commit --allow-empty -m "Beamup empty auto commit"
-          git push beamup HEAD:master --force
+
+          # Beamup leaves a deploy lock behind when a deploy is interrupted, and
+          # it cannot be cleared from here: apps:unlock is not among the commands
+          # their ssh allows. It does clear on its own, usually within a couple
+          # of minutes, so the push is retried rather than failing the release.
+          # Anything that is not the lock fails immediately, so a broken build is
+          # still a broken build.
+          for attempt in $(seq 1 6); do
+            if OUTPUT=$(git push beamup HEAD:master --force 2>&1); then
+              echo "$OUTPUT" | tail -20
+              echo "Deployed on attempt $attempt."
+              exit 0
+            fi
+
+            echo "$OUTPUT" | tail -20
+
+            if ! echo "$OUTPUT" | grep -q "deploy lock"; then
+              echo "Push failed for a reason other than the deploy lock."
+              exit 1
+            fi
+
+            echo "Deploy lock held, attempt $attempt of 6, retrying in 45s."
+            sleep 45
+          done
+
+          echo "The deploy lock was still held after 6 attempts."
+          exit 1
       - name: Create env variables
         env:
           OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}

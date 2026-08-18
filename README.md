@@ -159,6 +159,11 @@ the app and tell the repo about it:
 `ADDON_HOSTNAME` matters more than it looks: it builds the subtitle urls handed to
 Stremio, so a wrong value gives subtitles that appear in the list and never load.
 
+Beamup sometimes leaves a deploy lock behind after an interrupted deploy, and
+`apps:unlock` is not among the commands their ssh allows. The workflow retries a
+locked push for a few minutes rather than failing, and fails immediately on
+anything else, so a broken build still fails fast.
+
 ## Installing in Stremio
 
 Open `https://<your-host>/configure`, enter your OpenSubtitles username and
