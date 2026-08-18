@@ -72,19 +72,22 @@ addon.get("/:userConfig/srt/:fileId.srt", [
   downloadSubtitle,
 ]);
 
-async function init() {
+function init() {
   logger.info("Starting initialization.");
-  try {
-    if (!config.get("openSubtitles.apiKey")) {
-      throw new Error("OPENSUBTITLES_API_KEY is not set");
-    }
 
-    addon.listen(PORT, function () {
-      logger.info(`Started addon on: ${HTTP}://${HOSTNAME}:${PORT}`);
+  // Loud, but deliberately not fatal. Beamup creates the app on the first
+  // deploy and can only be given its config afterwards, so the first boot
+  // always happens without a key. Refusing to listen would fail that deploy
+  // and leave no app to configure.
+  if (!config.get("openSubtitles.apiKey")) {
+    logger.error(new Error("OPENSUBTITLES_API_KEY is not set"), {
+      description: "Every call to OpenSubtitles will fail until it is.",
     });
-  } catch (err) {
-    logger.error(err, { description: "Error initializing addon." });
   }
+
+  addon.listen(PORT, function () {
+    logger.info(`Started addon on: ${HTTP}://${HOSTNAME}:${PORT}`);
+  });
 }
 
 init();
