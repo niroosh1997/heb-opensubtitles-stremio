@@ -111,9 +111,14 @@ const formatSrtUrl = (userConfig, fileId) => {
   const HTTP = config.get("ssl") ? "https" : "http";
   const HOSTNAME = config.get("HOSTNAME");
 
-  // Production deployment is behind a proxy so I remove the useless port.
-  const PRODUCTION = config.util.getEnv("NODE_ENV") === "production";
-  const addonUrl = `${HTTP}://${HOSTNAME}${PRODUCTION ? "" : `:${PORT}`}`;
+  // The port belongs in the url only when the addon is reached directly on it,
+  // which is local development over http. Anything served over https is behind
+  // something terminating tls on the standard port, whether that is beamup, a
+  // tunnel or anything else, and appending the port there produces urls Stremio
+  // cannot reach.
+  const addonUrl = `${HTTP}://${HOSTNAME}${
+    config.get("ssl") ? "" : `:${PORT}`
+  }`;
 
   return `${addonUrl}/${userConfig}/srt/${fileId}.srt`;
 };
