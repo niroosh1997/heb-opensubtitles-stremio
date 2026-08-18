@@ -8,14 +8,16 @@ const EMPTY_TTL = Number(config.get("subsCache.emptyTtlMs"));
 
 const cache = new LRUCache({ max: MAX_ENTRIES, ttl: FOUND_TTL });
 
-// Keyed on exactly what fetchSubsFromKtuvit passes to Ktuvit: the type decides
-// which endpoint is called, and the Ktuvit ID with the season and episode are
-// its arguments. Stremio's filename, hash and size are what make every URL
-// unique and route based caching useless, and none of them reach the key, so
-// two releases of one episode share an entry and each request still gets its
-// own ordering from sortSubsByFilename afterwards.
+// Keyed on exactly what the search sends to OpenSubtitles: the imdb id, the
+// season and episode for a series, and the languages asked for. Stremio's
+// filename, hash and size are what make every URL unique and route based
+// caching useless, and none of them reach the key, so two releases of one
+// episode share an entry and each request still gets its own ordering from
+// sortSubsByFilename afterwards.
+//
+// The list does not depend on who is asking, so one entry serves every user.
 const keyFor = (title) => {
-  const parts = [title.type, title.ktuvitID];
+  const parts = [title.type, title.imdbID];
 
   if (title.season !== undefined) {
     parts.push(title.season);
@@ -23,6 +25,7 @@ const keyFor = (title) => {
   if (title.episode !== undefined) {
     parts.push(title.episode);
   }
+  parts.push(title.languages);
 
   return parts.join(":");
 };
@@ -59,7 +62,7 @@ const getOrFetch = async (title, fetchSubs) => {
     return copyOf(subs);
   } catch (err) {
     // A failed fetch is never cached. Keeping it would turn one bad response
-    // from Ktuvit into an empty subtitles list for everyone until it expired.
+    // from OpenSubtitles into an empty subtitles list for everyone until it expired.
     cache.delete(key);
     throw err;
   }

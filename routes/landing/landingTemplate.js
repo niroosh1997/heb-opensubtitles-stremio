@@ -244,7 +244,7 @@ function landingTemplate(manifest) {
       <div id="background-shade" style="background:rgba(0, 0, 0, 0.60);padding-top: 30px;">
          <div id="addon">
             <div class="logo">
-               <a href="https://ktuvit.me/">
+               <a href="https://www.opensubtitles.com/">
                   <img src="${logo}">
                </a>
             </div>

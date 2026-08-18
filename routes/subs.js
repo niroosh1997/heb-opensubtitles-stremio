@@ -1,48 +1,20 @@
-const { initKtuvitManager } = require("../clients/ktuvit");
-const { type } = require("../common/ktuvitEnums");
+const openSubtitles = require("../clients/openSubtitles");
+const { type } = require("../common/mediaTypes");
 const { getOrFetch } = require("../common/subsCache");
 const logger = require("../common/logger");
 const config = require("config");
 const { distance } = require("fastest-levenshtein");
 
-let ktuvit;
-
-const LOCAL_SERVER_ENCODER_URL = "http://127.0.0.1:11470/subtitles.vtt?from=";
+const LANGUAGES = config.get("openSubtitles.languages");
 const imdbIDRegex = /^tt\d{7,9}$/;
-
-const initSubs = async () => {
-  ktuvit = await initKtuvitManager();
-  logger.info("Done initializing subs.");
-};
 
 const exitEarlyWithEmptySubtitlesArray = (res) => {
   res.send({ subtitles: [] });
 };
 
-const fetchSubsMiddleware = async (req, res, next) => {
-  try {
-    const ktuvitFetchedSubs = await getOrFetch(req.title, () =>
-      fetchSubsFromKtuvit(req.title)
-    );
-    logger.debug("Resolved title subs.", {
-      ktuvitID: req.title?.ktuvitID,
-      subsFound: ktuvitFetchedSubs?.length ?? 0,
-    });
-    req.ktuvitSubs = ktuvitFetchedSubs;
-    next();
-  } catch (err) {
-    logger.error(err, {
-      description: "Error occurred while fetching title subs from ktuvit",
-      title: JSON.stringify(req.title || {}),
-    });
-    req.ktuvitSubs = [];
-    next();
-  }
-};
-
-const extractTitleInfo = async (req, res, next) => {
-  const type = req.params.type;
-  const [imdbID, season, episode] = deconstructImdbId(req.params.imdbId);
+const extractTitleInfo = (req, res, next) => {
+  const requestedType = req.params.type;
+  const [imdbID, season, episode] = req.params.imdbId.split(":");
 
   if (!imdbIDRegex.test(imdbID)) {
     logger.info("Invalid imdb ID", { imdbID });
@@ -50,48 +22,23 @@ const extractTitleInfo = async (req, res, next) => {
     return;
   }
 
-  const extraArgs = extractExtraArgs(req.params?.query);
+  req.title = {
+    type: requestedType,
+    imdbID,
+    season,
+    episode,
+    languages: LANGUAGES,
+    ...extractExtraArgs(req.params?.query),
+  };
 
-  try {
-    logger.info("Requesting title's Ktuvit ID.", {
-      type,
-      imdbId: imdbID,
-      season,
-      episode,
-    });
-    const ktuvitID = await ktuvit.getKtuvitID({
-      type: type,
-      imdbId: imdbID,
-    });
-    logger.debug("Received title's Ktuvit ID.", { imdbID, ktuvitID });
-
-    if (!ktuvitID) {
-      exitEarlyWithEmptySubtitlesArray(res);
-    } else {
-      req.title = { type, imdbID, season, episode, ktuvitID, ...extraArgs };
-      next();
-    }
-  } catch (err) {
-    logger.error(err, {
-      type,
-      imdbID,
-      season,
-      episode,
-      extraArgs,
-      description: "Unable to get title's ktuvit ID",
-    });
-    exitEarlyWithEmptySubtitlesArray(res);
-  }
-};
-
-const deconstructImdbId = (imdbParam) => {
-  return imdbParam.split(":");
+  next();
 };
 
 const extractExtraArgs = (query) => {
   if (!query) {
     return {};
   }
+
   const extraArgs = {};
   for (const arg of query.split("&")) {
     const [key, value] = arg.split("=");
@@ -101,51 +48,65 @@ const extractExtraArgs = (query) => {
   return extraArgs;
 };
 
-const fetchSubsFromKtuvit = async (title) => {
+// The subtitles list is the same whoever asks for it, so it is fetched without
+// a session and shared by every user. Only downloading is per user.
+const fetchSubsFromOpenSubtitles = async (title) => {
   switch (title.type) {
     case type.MOVIE:
-      logger.info("Requesting movie's subs list from Ktuvit.", {
-        ktuvitID: title.ktuvitID,
+      return openSubtitles.search({
+        imdbID: title.imdbID,
+        languages: title.languages,
       });
-      return ktuvit.getSubsIDsListMovie(title.ktuvitID);
     case type.SERIES:
-      logger.info("Requesting episode's subs list from Ktuvit.", {
-        ktuvitID: title.ktuvitID,
+      return openSubtitles.search({
+        imdbID: title.imdbID,
         season: title.season,
         episode: title.episode,
+        languages: title.languages,
       });
-      return ktuvit.getSubsIDsListEpisode(
-        title.ktuvitID,
-        title.season,
-        title.episode
-      );
     default:
       logger.info("Unknown type found", { type: title.type });
       return [];
   }
 };
 
+const fetchSubsMiddleware = async (req, res, next) => {
+  try {
+    const found = await getOrFetch(req.title, () =>
+      fetchSubsFromOpenSubtitles(req.title)
+    );
+    logger.debug("Resolved title subs.", {
+      imdbID: req.title?.imdbID,
+      subsFound: found?.length ?? 0,
+    });
+    req.subs = found;
+    next();
+  } catch (err) {
+    logger.error(err, {
+      description:
+        "Error occurred while fetching title subs from OpenSubtitles",
+      title: JSON.stringify(req.title || {}),
+    });
+    req.subs = [];
+    next();
+  }
+};
+
 const formatSubs = (req, res) => {
   // Definition for a Stremio sub file can found here: https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/subtitles.md
-  const stremioSubs = { subtitles: [] };
-
-  for (const ktuvitSub of req.ktuvitSubs) {
-    stremioSubs.subtitles.push({
-      // Sub's file name will serve as the ID as requested by users.
-      id: `[KTUVIT]${ktuvitSub.subName}`,
-      lang: "heb",
-      url: config.get("enableLocalServerEncoding")
-        ? LOCAL_SERVER_ENCODER_URL +
-          formatSrtUrl(req.title.ktuvitID, ktuvitSub.id)
-        : formatSrtUrl(req.title.ktuvitID, ktuvitSub.id),
-    });
-  }
+  const stremioSubs = {
+    subtitles: req.subs.map((sub) => ({
+      id: `[OS]${sub.fileName || sub.release}`,
+      lang: sub.language || "heb",
+      url: formatSrtUrl(req.params.userConfig, sub.fileId),
+    })),
+  };
 
   sortSubsByFilename(stremioSubs, req?.title?.filename);
   res.send(stremioSubs);
 };
 
-const formatSrtUrl = (ktuvitTitleId, ktuvitSubId) => {
+const formatSrtUrl = (userConfig, fileId) => {
   const PORT = config.get("PORT");
   const HTTP = config.get("ssl") ? "https" : "http";
   const HOSTNAME = config.get("HOSTNAME");
@@ -154,9 +115,7 @@ const formatSrtUrl = (ktuvitTitleId, ktuvitSubId) => {
   const PRODUCTION = config.util.getEnv("NODE_ENV") === "production";
   const addonUrl = `${HTTP}://${HOSTNAME}${PRODUCTION ? "" : `:${PORT}`}`;
 
-  const finalSrtRoute = `${addonUrl}/srt/${ktuvitTitleId}/${ktuvitSubId}.srt`;
-
-  return finalSrtRoute;
+  return `${addonUrl}/${userConfig}/srt/${fileId}.srt`;
 };
 
 const sortSubsByFilename = (stremioSubsArray, titleFilename) => {
@@ -167,15 +126,10 @@ const sortSubsByFilename = (stremioSubsArray, titleFilename) => {
 
   stremioSubsArray.subtitles.sort((firstSub, secondSub) => {
     return (
-      distance(titleFilename, firstSub.id.replace("[KTUVIT]", "")) -
-      distance(titleFilename, secondSub.id.replace("[KTUVIT]", ""))
+      distance(titleFilename, firstSub.id.replace("[OS]", "")) -
+      distance(titleFilename, secondSub.id.replace("[OS]", ""))
     );
   });
 };
 
-module.exports = {
-  extractTitleInfo,
-  fetchSubsMiddleware,
-  formatSubs,
-  initSubs,
-};
+module.exports = { extractTitleInfo, fetchSubsMiddleware, formatSubs };

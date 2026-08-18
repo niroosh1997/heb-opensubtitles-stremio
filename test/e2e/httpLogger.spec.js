@@ -4,6 +4,10 @@ const express = require("express");
 const { httpLogger } = require("../../common/httpLogger");
 
 const SUBTITLE_TEXT = "SECRET_SUBTITLE_TEXT";
+const CONFIG_SEGMENT = require("../../common/userConfig").encode({
+  username: "viewer",
+  password: "SECRET_PASSWORD",
+});
 const SRT_PAYLOAD = `1\n00:00:01,000 --> 00:00:04,000\n${SUBTITLE_TEXT}\n`;
 
 // Replaces process.stdout.write so the assertions run against the line winston
@@ -29,9 +33,9 @@ describe("request logging", function () {
     addon.use(httpLogger);
 
     addon.get("/manifest.json", (req, res) =>
-      res.send({ id: "me.stremio.ktuvit" })
+      res.send({ id: "heb.stremio.opensubtitles" })
     );
-    addon.get("/srt/:ktuvitId/:subId.srt", (req, res) => {
+    addon.get("/:userConfig/srt/:fileId.srt", (req, res) => {
       res.setHeader("Content-Type", "application/x-subrip; charset=utf-8");
       res.end(Buffer.from(SRT_PAYLOAD));
     });
@@ -96,11 +100,11 @@ describe("request logging", function () {
   });
 
   it("should log an SRT request without any of the subtitle's content", async function () {
-    const [line] = await logOutputFor("/srt/TITLE123/SUB456.srt");
+    const [line] = await logOutputFor(`/${CONFIG_SEGMENT}/srt/111.srt`);
 
     assert.match(
       line,
-      /\[http\]: GET \/srt\/TITLE123\/SUB456\.srt 200 (\d+|-) - [\d.]+ ms/
+      /\[http\]: GET \/<config>\/srt\/111\.srt 200 (\d+|-) - [\d.]+ ms/
     );
 
     for (const payloadFragment of [SUBTITLE_TEXT, "00:00:01,000", "-->"]) {
@@ -130,6 +134,17 @@ describe("request logging", function () {
   it("should log requests that no route handled", async function () {
     const [line] = await logOutputFor("/not-a-route");
 
-    assert.match(line, /\[http\]: GET \/not-a-route 404/);
+    // An unrecognised first segment is redacted rather than logged, because a
+    // user landing on their own configured url with nothing after it would
+    // otherwise put their password in the log. The cost is that 404s for
+    // unknown paths are recorded without the path.
+    assert.match(line, /\[http\]: GET \/<config> 404/);
+  });
+
+  it("should keep the user's password out of the log", async function () {
+    const [line] = await logOutputFor(`/${CONFIG_SEGMENT}/srt/111.srt`);
+
+    assert.ok(!line.includes("SECRET_PASSWORD"), `Password leaked: ${line}`);
+    assert.ok(!line.includes(CONFIG_SEGMENT), `Config leaked: ${line}`);
   });
 });

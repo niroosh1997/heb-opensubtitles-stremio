@@ -1,15 +1,18 @@
 {
   "addonAuthorEmail": "AUTHOR_EMAIL",
-  "ktuvit": {
-    "email": "KTUVIT_USER_EMAIL",
-    "hashedPassword": "KTUVIT_USER_HASHED_PASSWORD"
-  },
   "PORT": "PORT",
   "logLevel": "LOG_LEVEL",
-  "bytesNeededForDetection": "DETECTION_BYTES",
   "subsCache": {
     "maxEntries": "SUBS_CACHE_MAX_ENTRIES",
     "foundTtlMs": "SUBS_CACHE_FOUND_TTL_MS",
     "emptyTtlMs": "SUBS_CACHE_EMPTY_TTL_MS"
+  },
+  "openSubtitles": {
+    "apiKey": "OPENSUBTITLES_API_KEY",
+    "host": "OPENSUBTITLES_HOST",
+    "timeoutMs": "OPENSUBTITLES_TIMEOUT_MS",
+    "maxSessions": "OPENSUBTITLES_MAX_SESSIONS",
+    "sessionTtlMs": "OPENSUBTITLES_SESSION_TTL_MS",
+    "languages": "OPENSUBTITLES_LANGUAGES"
   }
 }

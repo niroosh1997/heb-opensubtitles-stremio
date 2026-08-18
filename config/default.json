@@ -3,12 +3,18 @@
   "ssl": false,
   "HOSTNAME": "localhost",
   "addonAuthorEmail": "set.me@example.com",
-  "enableLocalServerEncoding": false,
   "logLevel": "http",
-  "bytesNeededForDetection": 256,
   "subsCache": {
     "maxEntries": 500,
     "foundTtlMs": 3600000,
     "emptyTtlMs": 300000
+  },
+  "openSubtitles": {
+    "apiKey": "",
+    "host": "api.opensubtitles.com",
+    "timeoutMs": 10000,
+    "maxSessions": 500,
+    "sessionTtlMs": 82800000,
+    "languages": "he"
   }
 }

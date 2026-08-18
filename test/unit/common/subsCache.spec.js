@@ -12,13 +12,13 @@ const SUBS = [
 
 // Shaped like the req.title that extractTitleInfo builds: season and episode
 // are strings for a series and present but undefined for a movie, and the
-// resolved ktuvitID always comes along.
+// languages asked for always come along.
 const movie = (overrides = {}) => ({
   type: "movie",
   imdbID: "tt9407490",
   season: undefined,
   episode: undefined,
-  ktuvitID: "KT9407490",
+  languages: "he",
   ...overrides,
 });
 
@@ -27,7 +27,7 @@ const episode = (overrides = {}) => ({
   imdbID: "tt0903747",
   season: "2",
   episode: "5",
-  ktuvitID: "KT0903747",
+  languages: "he",
   ...overrides,
 });
 
@@ -88,7 +88,7 @@ const SHARE_ONE_FETCH = [
   {
     what: "a movie whose undefined season and episode keys are absent instead",
     first: movie(),
-    second: { type: "movie", imdbID: "tt9407490", ktuvitID: "KT9407490" },
+    second: { type: "movie", imdbID: "tt9407490", languages: "he" },
   },
   {
     what: "an episode asked for by two different releases",
@@ -110,18 +110,13 @@ const SHARE_ONE_FETCH = [
     first: episode(),
     second: release(episode(), "Breaking.Bad.S02E05.BluRay.mkv", "ghi789", "2"),
   },
-  {
-    what: "one title reached through two different imdb ids",
-    first: movie(),
-    second: movie({ imdbID: "tt9999999" }),
-  },
 ];
 
 const NEED_THEIR_OWN_FETCH = [
   {
     what: "two different movies",
     first: movie(),
-    second: movie({ imdbID: "tt0111161", ktuvitID: "KT0111161" }),
+    second: movie({ imdbID: "tt0111161" }),
   },
   {
     what: "two episodes of the same season",
@@ -136,23 +131,23 @@ const NEED_THEIR_OWN_FETCH = [
   {
     what: "the same season and episode of two different series",
     first: episode(),
-    second: episode({ imdbID: "tt0944947", ktuvitID: "KT0944947" }),
+    second: episode({ imdbID: "tt0944947" }),
   },
   {
-    what: "one imdb id that now resolves to a different ktuvit id",
+    what: "the same title asked for in two languages",
     first: movie(),
-    second: movie({ ktuvitID: "KT9407490_REINDEXED" }),
+    second: movie({ languages: "en" }),
   },
   {
-    what: "the same ktuvit id with nothing but the type to tell them apart",
-    first: { type: "movie", ktuvitID: "KT0903747" },
-    second: { type: "series", ktuvitID: "KT0903747" },
+    what: "the same imdb id with nothing but the type to tell them apart",
+    first: { type: "movie", imdbID: "tt0903747", languages: "he" },
+    second: { type: "series", imdbID: "tt0903747", languages: "he" },
   },
   {
     what: "two releases of two different movies",
     first: release(movie(), "Freies.Land.2019.BDRip.avi", "aaa", "1"),
     second: release(
-      movie({ imdbID: "tt0111161", ktuvitID: "KT0111161" }),
+      movie({ imdbID: "tt0111161" }),
       "Shawshank.1994.BDRip.avi",
       "bbb",
       "2"
@@ -168,7 +163,7 @@ describe("subsCache getOrFetch", function () {
   });
 
   SHARE_ONE_FETCH.forEach(({ what, first, second }) => {
-    it(`should ask Ktuvit once for ${what}`, async function () {
+    it(`should ask OpenSubtitles once for ${what}`, async function () {
       const fetchSubs = countingFetch();
 
       const firstSubs = await getOrFetch(first, fetchSubs);
@@ -177,7 +172,7 @@ describe("subsCache getOrFetch", function () {
       assert.strictEqual(
         fetchSubs.callCount,
         1,
-        `Expected one Ktuvit call for ${what}, got ${fetchSubs.callCount}`
+        `Expected one OpenSubtitles call for ${what}, got ${fetchSubs.callCount}`
       );
       assert.deepStrictEqual(firstSubs, SUBS);
       assert.deepStrictEqual(secondSubs, SUBS);
@@ -185,7 +180,7 @@ describe("subsCache getOrFetch", function () {
   });
 
   NEED_THEIR_OWN_FETCH.forEach(({ what, first, second }) => {
-    it(`should ask Ktuvit twice for ${what}`, async function () {
+    it(`should ask OpenSubtitles twice for ${what}`, async function () {
       const fetchSubs = countingFetch();
 
       await getOrFetch(first, fetchSubs);
@@ -194,12 +189,12 @@ describe("subsCache getOrFetch", function () {
       assert.strictEqual(
         fetchSubs.callCount,
         2,
-        `Expected two Ktuvit calls for ${what}, got ${fetchSubs.callCount}`
+        `Expected two OpenSubtitles calls for ${what}, got ${fetchSubs.callCount}`
       );
     });
   });
 
-  it("should ask Ktuvit once however many releases of one episode arrive", async function () {
+  it("should ask OpenSubtitles once however many releases of one episode arrive", async function () {
     const fetchSubs = countingFetch();
     const releases = [
       "Breaking.Bad.S02E05.1080p.WEB-DL.mkv",
@@ -216,7 +211,7 @@ describe("subsCache getOrFetch", function () {
     assert.strictEqual(
       fetchSubs.callCount,
       1,
-      `Expected 1 Ktuvit call for ${releases.length} releases, got ${fetchSubs.callCount}`
+      `Expected 1 OpenSubtitles call for ${releases.length} releases, got ${fetchSubs.callCount}`
     );
   });
 
@@ -244,7 +239,7 @@ describe("subsCache getOrFetch", function () {
 
   it("should not cache a failed fetch", async function () {
     const fetchSubs = sinon.stub();
-    fetchSubs.onFirstCall().rejects(new Error("ktuvit is down"));
+    fetchSubs.onFirstCall().rejects(new Error("opensubtitles is down"));
     fetchSubs.onSecondCall().callsFake(async () => [...SUBS]);
 
     await assert.rejects(() => getOrFetch(movie(), fetchSubs));
@@ -278,10 +273,10 @@ describe("subsCache getOrFetch", function () {
     ({ getOrFetch } = loadCache({ "subsCache.maxEntries": 2 }));
     const fetchSubs = countingFetch();
 
-    await getOrFetch(movie({ ktuvitID: "KT1" }), fetchSubs);
-    await getOrFetch(movie({ ktuvitID: "KT2" }), fetchSubs);
-    await getOrFetch(movie({ ktuvitID: "KT3" }), fetchSubs);
-    await getOrFetch(movie({ ktuvitID: "KT1" }), fetchSubs);
+    await getOrFetch(movie({ imdbID: "tt0000001" }), fetchSubs);
+    await getOrFetch(movie({ imdbID: "tt0000002" }), fetchSubs);
+    await getOrFetch(movie({ imdbID: "tt0000003" }), fetchSubs);
+    await getOrFetch(movie({ imdbID: "tt0000001" }), fetchSubs);
 
     assert.strictEqual(
       fetchSubs.callCount,

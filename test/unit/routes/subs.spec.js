@@ -1,8 +1,115 @@
 const assert = require("assert");
 const sinon = require("sinon");
-const { formatSubs } = require("../../../routes/subs");
+const proxyquire = require("proxyquire").noCallThru();
 
-const LOCAL_SERVER_PREFIX = "http://127.0.0.1:11470/subtitles.vtt?from=";
+const USER_CONFIG_SEGMENT = "eyJ1c2VybmFtZSI6InZpZXdlciJ9";
+
+const FOUND = [
+  { fileId: 111, fileName: "Freies.Land.2019.DVDRIP.he.srt", language: "he" },
+  { fileId: 222, fileName: "Freies.Land.2019.BDRip.he.srt", language: "he" },
+];
+
+const loadSubs = (search) =>
+  proxyquire("../../../routes/subs", {
+    "../clients/openSubtitles": { search },
+    "../common/logger": {
+      info: sinon.spy(),
+      debug: sinon.spy(),
+      error: sinon.spy(),
+    },
+    "../common/subsCache": proxyquire("../../../common/subsCache", {
+      config: {
+        get: (key) =>
+          ({
+            "subsCache.maxEntries": 500,
+            "subsCache.foundTtlMs": 60000,
+            "subsCache.emptyTtlMs": 5000,
+          }[key]),
+      },
+      "./logger": { debug: sinon.spy() },
+    }),
+  });
+
+describe("extractTitleInfo", function () {
+  it("should split a series id into its imdb id, season and episode", function () {
+    const { extractTitleInfo } = loadSubs(sinon.stub().resolves([]));
+    const req = { params: { type: "series", imdbId: "tt0903747:2:5" } };
+    const next = sinon.spy();
+
+    extractTitleInfo(req, { send: sinon.spy() }, next);
+
+    assert.ok(next.called);
+    assert.strictEqual(req.title.imdbID, "tt0903747");
+    assert.strictEqual(req.title.season, "2");
+    assert.strictEqual(req.title.episode, "5");
+  });
+
+  it("should keep the filename off to one side for sorting", function () {
+    const { extractTitleInfo } = loadSubs(sinon.stub().resolves([]));
+    const req = {
+      params: {
+        type: "movie",
+        imdbId: "tt9407490",
+        query: "videoHash=abc&videoSize=1&filename=Freies.Land.2019.DVDRIP.avi",
+      },
+    };
+
+    extractTitleInfo(req, { send: sinon.spy() }, sinon.spy());
+
+    assert.strictEqual(req.title.filename, "Freies.Land.2019.DVDRIP.avi");
+  });
+
+  it("should answer an invalid imdb id with an empty list", function () {
+    const { extractTitleInfo } = loadSubs(sinon.stub().resolves([]));
+    const res = { send: sinon.spy() };
+    const next = sinon.spy();
+
+    extractTitleInfo({ params: { type: "movie", imdbId: "nope" } }, res, next);
+
+    assert.ok(res.send.calledWith({ subtitles: [] }));
+    assert.ok(next.notCalled, "The chain should stop on an invalid id");
+  });
+});
+
+describe("fetchSubsMiddleware", function () {
+  const titleFor = (filename) => ({
+    type: "movie",
+    imdbID: "tt9407490",
+    season: undefined,
+    episode: undefined,
+    languages: "he",
+    filename,
+  });
+
+  const callWith = async (subs, filename) => {
+    const req = { title: titleFor(filename) };
+    await subs.fetchSubsMiddleware(req, { send: sinon.spy() }, () => {});
+    return req;
+  };
+
+  it("should search OpenSubtitles once for two viewers on different releases", async function () {
+    const search = sinon.stub().callsFake(async () => [...FOUND]);
+    const subs = loadSubs(search);
+
+    await callWith(subs, "Freies.Land.2019.DVDRIP.avi");
+    await callWith(subs, "Freies.Land.2019.BDRip.avi");
+
+    assert.strictEqual(
+      search.callCount,
+      1,
+      "The second viewer should have been served from the cache"
+    );
+  });
+
+  it("should fall back to an empty list when the search fails", async function () {
+    const search = sinon.stub().rejects(new Error("opensubtitles is down"));
+    const subs = loadSubs(search);
+
+    const req = await callWith(subs, "Freies.Land.2019.DVDRIP.avi");
+
+    assert.deepStrictEqual(req.subs, []);
+  });
+});
 
 describe("formatSubs", function () {
   let res;
@@ -11,137 +118,51 @@ describe("formatSubs", function () {
     res = { send: sinon.spy() };
   });
 
-  it("should return a direct /srt/ URL, not the local server proxy", function () {
-    const req = {
-      ktuvitSubs: [{ id: "SUB123", subName: "My.Subtitle.srt" }],
-      title: { ktuvitID: "TITLE456" },
-    };
+  const requestWith = (filename) => ({
+    params: { userConfig: USER_CONFIG_SEGMENT },
+    subs: [...FOUND],
+    title: { filename },
+  });
 
-    formatSubs(req, res);
+  it("should point each subtitle at this addon, carrying the user's config", function () {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
+
+    formatSubs(requestWith(undefined), res);
 
     const { subtitles } = res.send.firstCall.args[0];
     assert.ok(
-      subtitles[0].url.includes("/srt/TITLE456/SUB123.srt"),
-      `Expected URL to contain /srt/TITLE456/SUB123.srt, got: ${subtitles[0].url}`
+      subtitles[0].url.endsWith(`/${USER_CONFIG_SEGMENT}/srt/111.srt`),
+      `Unexpected url: ${subtitles[0].url}`
     );
+  });
+
+  it("should label the subtitles and their language", function () {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
+
+    formatSubs(requestWith(undefined), res);
+
+    const { subtitles } = res.send.firstCall.args[0];
+    assert.strictEqual(subtitles[0].id, "[OS]Freies.Land.2019.DVDRIP.he.srt");
+    assert.strictEqual(subtitles[0].lang, "he");
+  });
+
+  it("should put the closest release first", function () {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
+
+    formatSubs(requestWith("Freies.Land.2019.BDRip.avi"), res);
+
+    const { subtitles } = res.send.firstCall.args[0];
     assert.ok(
-      !subtitles[0].url.startsWith(LOCAL_SERVER_PREFIX),
-      `Expected URL not to start with local server proxy prefix, got: ${subtitles[0].url}`
+      subtitles[0].id.includes("BDRip"),
+      `Expected the BDRip subtitle first, got: ${subtitles[0].id}`
     );
   });
 
-  it("should set correct subtitle id and lang", function () {
-    const req = {
-      ktuvitSubs: [{ id: "SUB123", subName: "My.Subtitle.srt" }],
-      title: { ktuvitID: "TITLE456" },
-    };
+  it("should return an empty array when nothing was found", function () {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
 
-    formatSubs(req, res);
+    formatSubs({ params: {}, subs: [], title: {} }, res);
 
-    const { subtitles } = res.send.firstCall.args[0];
-    assert.strictEqual(subtitles[0].id, "[KTUVIT]My.Subtitle.srt");
-    assert.strictEqual(subtitles[0].lang, "heb");
-  });
-
-  it("should return an empty subtitles array when no subs are found", function () {
-    const req = {
-      ktuvitSubs: [],
-      title: { ktuvitID: "TITLE456" },
-    };
-
-    formatSubs(req, res);
-
-    const { subtitles } = res.send.firstCall.args[0];
-    assert.deepStrictEqual(subtitles, []);
-  });
-});
-
-describe("fetchSubsMiddleware", function () {
-  const proxyquire = require("proxyquire").noCallThru();
-
-  const SUBS = [{ id: "SUB1", subName: "Freies.Land.2019.DVDRIP.avi.srt" }];
-
-  const titleFor = (filename) => ({
-    type: "movie",
-    imdbID: "tt9407490",
-    season: undefined,
-    episode: undefined,
-    ktuvitID: "KT9407490",
-    filename,
-  });
-
-  let fetchSubsMiddleware;
-  let getSubsIDsListMovie;
-
-  beforeEach(async function () {
-    getSubsIDsListMovie = sinon.stub().callsFake(async () => [...SUBS]);
-
-    const subs = proxyquire("../../../routes/subs", {
-      "../clients/ktuvit": {
-        initKtuvitManager: async () => ({ getSubsIDsListMovie }),
-      },
-      "../common/logger": {
-        debug: sinon.spy(),
-        info: sinon.spy(),
-        error: sinon.spy(),
-      },
-      "../common/subsCache": proxyquire("../../../common/subsCache", {
-        config: {
-          get: (key) =>
-            ({
-              "subsCache.maxEntries": 500,
-              "subsCache.foundTtlMs": 60000,
-              "subsCache.emptyTtlMs": 5000,
-            }[key]),
-        },
-        "./logger": {
-          debug: sinon.spy(),
-          info: sinon.spy(),
-          error: sinon.spy(),
-        },
-      }),
-    });
-
-    ({ fetchSubsMiddleware } = subs);
-    await subs.initSubs();
-  });
-
-  const callWith = async (filename) => {
-    const req = { title: titleFor(filename) };
-    await fetchSubsMiddleware(req, { send: sinon.spy() }, () => {});
-    return req;
-  };
-
-  it("should ask Ktuvit once for two viewers watching different releases", async function () {
-    await callWith("Freies.Land.2019.D.BDRip.1.46Gb.MegaPeer.avi");
-    await callWith("Freies.Land.2019.DVDRIP.MegaPeer.avi");
-
-    assert.strictEqual(
-      getSubsIDsListMovie.callCount,
-      1,
-      "The second viewer should have been served from the cache"
-    );
-  });
-
-  it("should still put the subs on the request when they come from the cache", async function () {
-    await callWith("Freies.Land.2019.D.BDRip.avi");
-    const second = await callWith("Freies.Land.2019.DVDRIP.avi");
-
-    assert.deepStrictEqual(second.ktuvitSubs, SUBS);
-  });
-
-  it("should fall back to an empty list when Ktuvit fails, without caching it", async function () {
-    getSubsIDsListMovie.onFirstCall().rejects(new Error("ktuvit is down"));
-
-    const failed = await callWith("Freies.Land.2019.D.BDRip.avi");
-    assert.deepStrictEqual(failed.ktuvitSubs, []);
-
-    const retried = await callWith("Freies.Land.2019.DVDRIP.avi");
-    assert.deepStrictEqual(retried.ktuvitSubs, SUBS);
-    assert.strictEqual(
-      getSubsIDsListMovie.callCount,
-      2,
-      "A failure must not be cached as this title's subtitles"
-    );
+    assert.deepStrictEqual(res.send.firstCall.args[0], { subtitles: [] });
   });
 });

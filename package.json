@@ -4,7 +4,7 @@
   "description": "An unofficial Stremio addon for Hebrew subtitles from OpenSubtitles",
   "main": "index.js",
   "scripts": {
-    "test": "KTUVIT_USER_EMAIL=test KTUVIT_USER_HASHED_PASSWORD=test mocha 'test/**/*.spec.js'",
+    "test": "OPENSUBTITLES_API_KEY=test mocha 'test/**/*.spec.js'",
     "lint": "eslint .",
     "fix": "npm run lint -- --fix",
     "start": "node index.js",
@@ -33,12 +33,12 @@
     "sinon": "^22.0.0"
   },
   "dependencies": {
+    "axios": "^1.19.0",
     "config": "^4.4.1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.21.2",
     "fastest-levenshtein": "^1.0.16",
-    "ktuvit-api": "^0.4.3",
     "lru-cache": "^10.4.3",
     "morgan": "^1.11.0",
     "winston": "^3.8.2"
