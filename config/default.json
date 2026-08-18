@@ -15,6 +15,7 @@
     "timeoutMs": 10000,
     "maxSessions": 500,
     "sessionTtlMs": 82800000,
-    "languages": "he"
+    "languages": "he",
+    "rejectedTtlMs": 300000
   }
 }

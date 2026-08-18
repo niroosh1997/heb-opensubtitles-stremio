@@ -13,6 +13,7 @@ const {
   formatSubs,
 } = require("./routes/subs");
 const { downloadSubtitle } = require("./routes/downloadSubtitle");
+const { verifyCredentials } = require("./routes/verify");
 
 const PORT = config.get("PORT");
 const HTTP = config.get("ssl") ? "https" : "http";
@@ -21,6 +22,8 @@ const HOSTNAME = config.get("HOSTNAME");
 const addon = express();
 addon.use(cors());
 addon.use(httpLogger);
+// Only the verify endpoint takes a body, and it is small.
+addon.use(express.json({ limit: "1kb" }));
 
 const respondWithHeaders = function (req, res, next) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -53,6 +56,9 @@ addon.get("/:userConfig/manifest.json", [
 
 addon.get("/", landing);
 addon.get("/configure", landing);
+
+// The configure page checks the credentials here before handing out a link.
+addon.post("/verify", verifyCredentials);
 
 //Addon's readme request
 addon.get("/README.md", (req, res) => {

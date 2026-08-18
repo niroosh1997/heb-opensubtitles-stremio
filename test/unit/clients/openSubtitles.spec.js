@@ -59,6 +59,7 @@ const loadClient = () => {
           "openSubtitles.timeoutMs": 10000,
           "openSubtitles.maxSessions": 500,
           "openSubtitles.sessionTtlMs": 82800000,
+          "openSubtitles.rejectedTtlMs": 300000,
         }[key]),
     },
     "../common/logger": {
@@ -125,6 +126,39 @@ describe("openSubtitles login", function () {
     await client.login(CREDENTIALS);
     client.forgetSession(CREDENTIALS.username);
     await client.login(CREDENTIALS);
+
+    assert.strictEqual(instance.post.callCount, 2);
+  });
+
+  it("should not ask again about credentials already refused", async function () {
+    // Their docs say to stop sending a login that came back 401, and Stremio
+    // retries a failed subtitle more than a dozen times in a few seconds.
+    const { client, instance } = loadClient();
+    instance.post.rejects(
+      Object.assign(new Error("unauthorized"), { response: { status: 401 } })
+    );
+
+    await assert.rejects(() => client.login(CREDENTIALS));
+    await assert.rejects(() => client.login(CREDENTIALS));
+    await assert.rejects(() => client.login(CREDENTIALS));
+
+    assert.strictEqual(
+      instance.post.callCount,
+      1,
+      "Only the first attempt should reach OpenSubtitles"
+    );
+  });
+
+  it("should still try a different password for the same user", async function () {
+    const { client, instance } = loadClient();
+    instance.post.rejects(
+      Object.assign(new Error("unauthorized"), { response: { status: 401 } })
+    );
+
+    await assert.rejects(() => client.login(CREDENTIALS));
+    await assert.rejects(() =>
+      client.login({ ...CREDENTIALS, password: "corrected" })
+    );
 
     assert.strictEqual(instance.post.callCount, 2);
   });
