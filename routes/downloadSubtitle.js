@@ -1,4 +1,5 @@
 const openSubtitles = require("../clients/openSubtitles");
+const subtitleFileCache = require("../common/subtitleFileCache");
 const config = require("config");
 const logger = require("../common/logger");
 
@@ -38,20 +39,28 @@ const downloadSubtitle = async (req, res) => {
   };
 
   try {
+    // Logging in first, before the cache is consulted, so a cached file cannot
+    // be handed to someone whose credentials were never checked. The session is
+    // itself cached, so this costs nothing on a repeat.
     const session = await openSubtitles.login(req.userConfig);
 
-    logger.info("Requesting subtitle download from OpenSubtitles.", {
-      fileId,
-      username,
+    const content = await subtitleFileCache.getOrFetch(fileId, async () => {
+      logger.info("Requesting subtitle download from OpenSubtitles.", {
+        fileId,
+        username,
+      });
+
+      const link = await openSubtitles.requestDownloadLink(fileId, session);
+      const fetched = await openSubtitles.fetchSubtitleFile(link);
+
+      // Validated before it is cached, so one bad answer cannot become every
+      // viewer's subtitle until it expires.
+      if (!SRT_TIMESTAMP_PATTERN.test(fetched || "")) {
+        throw new Error("OpenSubtitles did not return a valid SRT file.");
+      }
+
+      return fetched;
     });
-
-    const link = await openSubtitles.requestDownloadLink(fileId, session);
-    const content = await openSubtitles.fetchSubtitleFile(link);
-
-    if (!SRT_TIMESTAMP_PATTERN.test(content || "")) {
-      respondWithError(null, "OpenSubtitles did not return a valid SRT file.");
-      return;
-    }
 
     logger.debug("Serving SRT file.", {
       fileId,
@@ -74,6 +83,11 @@ const downloadSubtitle = async (req, res) => {
 
     if (status === 406) {
       respondWithError(err, "The daily download quota is used up.", 429);
+      return;
+    }
+
+    if (/valid SRT/.test(err.message)) {
+      respondWithError(err, "OpenSubtitles did not return a valid SRT file.");
       return;
     }
 

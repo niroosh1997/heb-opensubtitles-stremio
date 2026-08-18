@@ -16,8 +16,21 @@ const load = (overrides = {}) => {
   };
   const logger = { info: sinon.spy(), debug: sinon.spy(), error: sinon.spy() };
 
+  // A fresh cache per test, or one test's download would be served to the next.
+  const subtitleFileCache = proxyquire("../../../common/subtitleFileCache", {
+    config: {
+      get: (key) =>
+        ({
+          "subtitleFileCache.maxBytes": 33554432,
+          "subtitleFileCache.ttlMs": 21600000,
+        }[key]),
+    },
+    "./logger": { debug: sinon.spy() },
+  });
+
   const { downloadSubtitle } = proxyquire("../../../routes/downloadSubtitle", {
     "../clients/openSubtitles": client,
+    "../common/subtitleFileCache": subtitleFileCache,
     "../common/logger": logger,
   });
 

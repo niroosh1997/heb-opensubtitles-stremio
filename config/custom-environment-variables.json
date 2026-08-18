@@ -21,5 +21,9 @@
     "languages": "OPENSUBTITLES_LANGUAGES",
     "rejectedTtlMs": "OPENSUBTITLES_REJECTED_TTL_MS"
   },
-  "srtCacheMaxAgeSeconds": "SRT_CACHE_MAX_AGE_SECONDS"
+  "srtCacheMaxAgeSeconds": "SRT_CACHE_MAX_AGE_SECONDS",
+  "subtitleFileCache": {
+    "maxBytes": "SUBTITLE_FILE_CACHE_MAX_BYTES",
+    "ttlMs": "SUBTITLE_FILE_CACHE_TTL_MS"
+  }
 }

@@ -18,5 +18,9 @@
     "languages": "he",
     "rejectedTtlMs": 300000
   },
-  "srtCacheMaxAgeSeconds": 86400
+  "srtCacheMaxAgeSeconds": 86400,
+  "subtitleFileCache": {
+    "maxBytes": 33554432,
+    "ttlMs": 21600000
+  }
 }
