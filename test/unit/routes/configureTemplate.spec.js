@@ -49,7 +49,10 @@ describe("manifest logo and contact", function () {
 
   const load = () =>
     proxyquire("../../../routes/manifest", {
-      config: { get: () => "niroosh1997@gmail.com" },
+      config: {
+        get: (key) =>
+          key === "manifestCacheMaxAgeSeconds" ? 300 : "niroosh1997@gmail.com",
+      },
       "../common/addonUrl": { addonBaseUrl: () => "https://addon.example.com" },
     });
 
@@ -57,7 +60,7 @@ describe("manifest logo and contact", function () {
     // Served by the addon so there is no third party left to take it down; the
     // project this was copied from hotlinked its logo from a wordpress cdn.
     const { serveManifest } = load();
-    const res = { send: sinon.spy() };
+    const res = { send: sinon.spy(), set: sinon.spy() };
 
     serveManifest({}, res);
 
@@ -69,7 +72,7 @@ describe("manifest logo and contact", function () {
 
   it("should carry a contact address that is not a placeholder", function () {
     const { serveManifest } = load();
-    const res = { send: sinon.spy() };
+    const res = { send: sinon.spy(), set: sinon.spy() };
 
     serveManifest({}, res);
 
@@ -79,5 +82,20 @@ describe("manifest logo and contact", function () {
       !/set\.me|example\.com/.test(contactEmail),
       `Placeholder shipped to every installer: ${contactEmail}`
     );
+  });
+
+  it("should not let the manifest be cached for hours", function () {
+    // With no header of its own it inherited beamup's four hours, so a new
+    // logo or contact address took that long to reach anyone.
+    const { serveManifest } = load();
+    const res = { send: sinon.spy(), set: sinon.spy() };
+
+    serveManifest({}, res);
+
+    const [, value] = res.set
+      .getCalls()
+      .find((c) => c.args[0] === "Cache-Control").args;
+    const maxAge = Number(value.match(/max-age=(\d+)/)[1]);
+    assert.ok(maxAge <= 900, `Manifest cached too long: ${value}`);
   });
 });

@@ -1,5 +1,9 @@
 const config = require("config");
 const { addonBaseUrl } = require("../common/addonUrl");
+
+const MANIFEST_MAX_AGE_SECONDS = Number(
+  config.get("manifestCacheMaxAgeSeconds")
+);
 const PACKAGE_VERSION = require("../package.json").version;
 
 const CONFIG_FIELDS = [
@@ -45,7 +49,12 @@ const withLogo = (manifest) => ({
   logo: `${addonBaseUrl()}/logo.png`,
 });
 
+// Without a Cache-Control of its own the manifest inherited beamup's four
+// hours, so a new version, logo or contact address took that long to reach
+// anyone, and Stremio's catalogue could pick up a stale copy. It is small and
+// changes rarely, but when it changes the change matters.
 const serveManifest = (req, res) => {
+  res.set("Cache-Control", `public, max-age=${MANIFEST_MAX_AGE_SECONDS}`);
   res.send(withLogo(req.userConfig ? configuredManifest() : MANIFEST));
 };
 
