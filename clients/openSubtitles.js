@@ -77,12 +77,17 @@ const api = (host) => {
 const toImdbNumber = (imdbID) => Number(String(imdbID).replace(/^tt/, ""));
 
 const login = async ({ username, password }) => {
-  const cached = sessions.get(username);
+  // Keyed on the password as well as the username. Keyed on the username alone,
+  // any password at all would be answered with whichever session that user had
+  // already established, so a wrong password looked accepted and would have
+  // spent their downloads.
+  const key = credentialKey({ username, password });
+
+  const cached = sessions.get(key);
   if (cached) {
     return cached;
   }
 
-  const key = credentialKey({ username, password });
   if (rejected.has(key)) {
     logger.debug("Skipping a login already rejected.", { username });
     throw rejectedError();
@@ -109,7 +114,7 @@ const login = async ({ username, password }) => {
     vip: Boolean(data.user?.vip),
   };
 
-  sessions.set(username, session);
+  sessions.set(key, session);
   rejected.delete(key);
   logger.debug("OpenSubtitles session established.", {
     username,
@@ -121,7 +126,8 @@ const login = async ({ username, password }) => {
   return session;
 };
 
-const forgetSession = (username) => sessions.delete(username);
+const forgetSession = (credentials) =>
+  sessions.delete(credentialKey(credentials));
 
 // Parameters are sent sorted and lowercased with no default values, which is
 // what OpenSubtitles asks for to avoid a redirect and to hit their cache.

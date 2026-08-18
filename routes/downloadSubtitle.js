@@ -52,7 +52,7 @@ const downloadSubtitle = async (req, res) => {
     // A rejected login is worth forgetting, otherwise a stale session keeps
     // being reused until it expires on its own.
     if (status === 401) {
-      openSubtitles.forgetSession(username);
+      openSubtitles.forgetSession(req.userConfig);
       respondWithError(err, "OpenSubtitles rejected the credentials.", 401);
       return;
     }

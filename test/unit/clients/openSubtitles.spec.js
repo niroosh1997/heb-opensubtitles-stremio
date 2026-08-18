@@ -124,10 +124,27 @@ describe("openSubtitles login", function () {
     const { client, instance } = loadClient();
 
     await client.login(CREDENTIALS);
-    client.forgetSession(CREDENTIALS.username);
+    client.forgetSession(CREDENTIALS);
     await client.login(CREDENTIALS);
 
     assert.strictEqual(instance.post.callCount, 2);
+  });
+
+  it("should not accept a different password for a user already signed in", async function () {
+    // Keyed on the username alone, any password would have been answered with
+    // the session that user already had: a wrong password looked accepted and
+    // would have spent their downloads.
+    const { client, instance } = loadClient();
+
+    await client.login(CREDENTIALS);
+    instance.post.rejects(
+      Object.assign(new Error("unauthorized"), { response: { status: 401 } })
+    );
+
+    await assert.rejects(
+      () => client.login({ ...CREDENTIALS, password: "wrong" }),
+      "A wrong password must not reuse the cached session"
+    );
   });
 
   it("should not ask again about credentials already refused", async function () {
