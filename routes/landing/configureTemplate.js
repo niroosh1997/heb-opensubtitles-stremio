@@ -31,6 +31,12 @@ const STYLES = `
     background: #7b5bf2; color: #fff; border-radius: 8px; font-weight: 600; text-decoration: none;
   }
   .warn { color: #ffb4a2; }
+  .error {
+    display: none; margin-top: 16px; padding: 12px; border-radius: 8px;
+    background: #40202a; border: 1px solid #7a3546; color: #ffb4a2; font-size: 14px;
+  }
+  .error.show { display: block; }
+  .ok { color: #a2e4b8; font-size: 14px; margin-top: 4px; }
 `;
 
 const SCRIPT = `
@@ -43,19 +49,56 @@ const SCRIPT = `
     return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/, "");
   }
 
-  document.getElementById("form").addEventListener("submit", function (event) {
+  var form = document.getElementById("form");
+  var button = document.getElementById("submit");
+  var error = document.getElementById("error");
+
+  function showError(message) {
+    error.textContent = message;
+    error.classList.add("show");
+  }
+
+  form.addEventListener("submit", function (event) {
     event.preventDefault();
     var username = document.getElementById("username").value.trim();
     var password = document.getElementById("password").value;
     if (!username || !password) { return; }
 
-    var segment = encodeConfig({ username: username, password: password });
-    var base = location.host + "/" + segment + "/manifest.json";
+    error.classList.remove("show");
+    document.getElementById("out").classList.remove("show");
+    button.disabled = true;
+    button.textContent = "Checking with OpenSubtitles...";
 
-    document.getElementById("url").textContent = location.protocol + "//" + base;
-    document.getElementById("install").href = "stremio://" + base;
-    document.getElementById("out").classList.add("show");
-    document.getElementById("out").scrollIntoView({ behavior: "smooth" });
+    // Checked before a link is handed out, so a wrong password is caught here
+    // rather than as subtitles that list and never load.
+    fetch("/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password: password }),
+    })
+      .then(function (res) { return res.json().then(function (body) { return { res: res, body: body }; }); })
+      .then(function (result) {
+        if (!result.res.ok) {
+          showError(result.body.error || "Could not check those details.");
+          return;
+        }
+
+        var segment = encodeConfig({ username: username, password: password });
+        var base = location.host + "/" + segment + "/manifest.json";
+
+        document.getElementById("url").textContent = location.protocol + "//" + base;
+        document.getElementById("install").href = "stremio://" + base;
+        document.getElementById("quota").textContent =
+          "Signed in. Your account allows " + result.body.allowedDownloads +
+          " downloads a day.";
+        document.getElementById("out").classList.add("show");
+        document.getElementById("out").scrollIntoView({ behavior: "smooth" });
+      })
+      .catch(function () { showError("Could not reach the addon. Try again."); })
+      .then(function () {
+        button.disabled = false;
+        button.textContent = "Check and create my install link";
+      });
   });
 `;
 
@@ -81,8 +124,10 @@ const configureTemplate = (manifest) => `<!DOCTYPE html>
       <input id="password" name="password" type="password"
              autocomplete="current-password" required>
 
-      <button type="submit">Create my install link</button>
+      <button type="submit" id="submit">Check and create my install link</button>
     </form>
+
+    <div class="error" id="error"></div>
 
     <p class="note">
       Your own account is used, so downloads count against your quota: 20 a day on a
@@ -91,6 +136,7 @@ const configureTemplate = (manifest) => `<!DOCTYPE html>
     </p>
 
     <div class="out" id="out">
+      <p class="ok" id="quota"></p>
       <p class="note">Open this on the device running Stremio:</p>
       <div class="url" id="url"></div>
       <a class="install" id="install" href="#">Install in Stremio</a>

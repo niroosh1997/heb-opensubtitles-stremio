@@ -1,4 +1,5 @@
 const axios = require("axios");
+const crypto = require("crypto");
 const config = require("config");
 const { LRUCache } = require("lru-cache");
 const logger = require("../common/logger");
@@ -16,6 +17,26 @@ const sessions = new LRUCache({
   max: Number(config.get("openSubtitles.maxSessions")),
   ttl: Number(config.get("openSubtitles.sessionTtlMs")),
 });
+
+// Credentials OpenSubtitles has already rejected. Their docs say to stop
+// sending a login that came back 401, and Stremio retries a failed subtitle
+// more than a dozen times in a few seconds, so without this one wrong password
+// spends a dozen of the thirty logins allowed per hour.
+const rejected = new LRUCache({
+  max: Number(config.get("openSubtitles.maxSessions")),
+  ttl: Number(config.get("openSubtitles.rejectedTtlMs")),
+});
+
+// Hashed so a rejected password is not held in memory.
+const credentialKey = ({ username, password }) =>
+  crypto.createHash("sha256").update(`${username}:${password}`).digest("hex");
+
+const rejectedError = () => {
+  const err = new Error("OpenSubtitles rejected these credentials");
+  err.response = { status: 401 };
+  err.alreadyRejected = true;
+  return err;
+};
 
 // Axios reports only "Request failed with status code N". OpenSubtitles puts
 // the reason in the response body, so it is attached to the error where the
@@ -61,12 +82,23 @@ const login = async ({ username, password }) => {
     return cached;
   }
 
+  const key = credentialKey({ username, password });
+  if (rejected.has(key)) {
+    logger.debug("Skipping a login already rejected.", { username });
+    throw rejectedError();
+  }
+
   logger.info("Logging in to OpenSubtitles.", { username });
 
-  const { data } = await api(DEFAULT_HOST).post("/login", {
-    username,
-    password,
-  });
+  let data;
+  try {
+    ({ data } = await api(DEFAULT_HOST).post("/login", { username, password }));
+  } catch (err) {
+    if (err.response?.status === 401) {
+      rejected.set(key, true);
+    }
+    throw err;
+  }
 
   const session = {
     token: data.token,
@@ -78,6 +110,7 @@ const login = async ({ username, password }) => {
   };
 
   sessions.set(username, session);
+  rejected.delete(key);
   logger.debug("OpenSubtitles session established.", {
     username,
     host: session.host,
@@ -157,6 +190,8 @@ const fetchSubtitleFile = async (link) => {
 
 module.exports = {
   login,
+  credentialsAreKnownBad: (credentials) =>
+    rejected.has(credentialKey(credentials)),
   forgetSession,
   search,
   requestDownloadLink,

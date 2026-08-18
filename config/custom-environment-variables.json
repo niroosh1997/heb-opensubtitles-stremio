@@ -18,6 +18,7 @@
     "timeoutMs": "OPENSUBTITLES_TIMEOUT_MS",
     "maxSessions": "OPENSUBTITLES_MAX_SESSIONS",
     "sessionTtlMs": "OPENSUBTITLES_SESSION_TTL_MS",
-    "languages": "OPENSUBTITLES_LANGUAGES"
+    "languages": "OPENSUBTITLES_LANGUAGES",
+    "rejectedTtlMs": "OPENSUBTITLES_REJECTED_TTL_MS"
   }
 }
