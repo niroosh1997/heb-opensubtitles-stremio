@@ -1,7 +1,7 @@
 {
   "addonAuthorEmail": "AUTHOR_EMAIL",
   "PORT": "PORT",
-  "HOSTNAME": "HOSTNAME",
+  "HOSTNAME": "ADDON_HOSTNAME",
   "ssl": {
     "__name": "SSL",
     "__format": "json"

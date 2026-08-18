@@ -42,4 +42,4 @@ jobs:
           ADDON_HOSTNAME: ${{ vars.ADDON_HOSTNAME }}
         run: |
           ssh dokku@a.baby-beamup.club config:set ${{ vars.BEAMUP_APP }} OPENSUBTITLES_API_KEY="$OPENSUBTITLES_API_KEY"
-          ssh dokku@a.baby-beamup.club config:set ${{ vars.BEAMUP_APP }} HOSTNAME="$ADDON_HOSTNAME"
+          ssh dokku@a.baby-beamup.club config:set ${{ vars.BEAMUP_APP }} ADDON_HOSTNAME="$ADDON_HOSTNAME"

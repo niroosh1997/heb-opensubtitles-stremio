@@ -154,7 +154,7 @@ the app and tell the repo about it:
 | Secret | `OPENSUBTITLES_API_KEY` | your OpenSubtitles consumer API key |
 | Variable | `BEAMUP_REPO` | the git remote BeamUp printed |
 | Variable | `BEAMUP_APP` | the dokku app, `<hash>/heb-opensubtitles-stremio` |
-| Variable | `ADDON_HOSTNAME` | the hostname BeamUp printed, without a scheme |
+| Variable | `ADDON_HOSTNAME` | the hostname BeamUp printed, without a scheme. Not `HOSTNAME`: a container runtime already defines that, as the container id |
 
 `ADDON_HOSTNAME` matters more than it looks: it builds the subtitle urls handed to
 Stremio, so a wrong value gives subtitles that appear in the list and never load.
