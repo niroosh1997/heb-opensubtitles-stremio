@@ -2,7 +2,7 @@
   "PORT": 3000,
   "ssl": false,
   "HOSTNAME": "localhost",
-  "addonAuthorEmail": "maor@magori.online",
+  "addonAuthorEmail": "set.me@example.com",
   "enableLocalServerEncoding": false,
   "logLevel": "http",
   "bytesNeededForDetection": 256,

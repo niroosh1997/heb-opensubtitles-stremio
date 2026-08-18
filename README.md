@@ -1,42 +1,50 @@
-# Ktuvit Stremio Addon
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/maormagori/ktuvit-stremio/beamup-deployment.yml?style=for-the-badge)
-[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/maormagori)
+# Hebrew OpenSubtitles Stremio Addon
 
+An unofficial [Stremio](http://strem.io/) addon that adds Hebrew subtitles from
+[OpenSubtitles](https://www.opensubtitles.com/) to media streamed by Stremio.
 
-This is an unofficial [Stremio](http://strem.io/) addon for [ktuvit.me](https://ktuvit.me/), previously known as Screwzira.
-It allows you to add Hebrew subtitles from Ktuvit to media streamed by Stremio. I have a similar addon for [Wizdom.xyz subtitles](https://github.com/maormagori/wizdom-stremio-v2) if you're interested.
+> **Status:** the OpenSubtitles client is not written yet. The addon currently
+> still fetches from Ktuvit.me, inherited from the project this is based on.
+> Everything around it, the routes, caching, logging and CI, is provider
+> agnostic and already in place.
 
-**DISCLAIMER**: I am not affiliated with nor a part of Ktuvit.me. Any problems, issues, and attacks on the service or the content they provide should be addressed to them.
+**DISCLAIMER**: I am not affiliated with nor a part of OpenSubtitles. Any problems,
+issues, and attacks on the service or the content they provide should be addressed
+to them.
 
-## Installation
-The addon is available in the community addons section in Stremio. Search for "Ktuvit.me Subtitles" and press on install.
+## Credits
 
-Alternatively, you can install the addon directly from here:
-https://4b139a4b7f94-ktuvit-stremio.baby-beamup.club/
+This project began as a copy of [maormagori/ktuvit-stremio](https://github.com/maormagori/ktuvit-stremio)
+by Maor Magori, and keeps its full commit history. The addon's structure, the
+Stremio protocol handling and the SRT proxying are all his work, used here under
+the MIT licence. If you want Ktuvit subtitles specifically, use his addon rather
+than this one.
 
 ## Development
 
-Before trying to dive deep into the addon, get familiar with [Stremio's Addon Protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md). Otherwise, things wouldn't make much sense.
+Before diving in, get familiar with [Stremio's Addon Protocol](https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md).
+Otherwise things will not make much sense.
 
-This addon is an [express](https://github.com/expressjs/express) server running on Node so make sure you're using the latest version of Node (Node 14 min) with NPM installed.
+This addon is an [express](https://github.com/expressjs/express) server running on
+Node. The test tooling requires Node 18.18 or newer.
 
-To get started, run these commands:
 ```bash
-git clone https://github.com/maormagori/ktuvit-stremio.git
-cd ktuvit-stremio
+git clone https://github.com/niroosh1997/heb-opensubtitles-stremio.git
+cd heb-opensubtitles-stremio
 npm install
 ```
 
-Before running the addon itself you'll have to set some environment variables so either export the required variables or create a `.env` file containing these variables:
+Set the required environment variables, either by exporting them or with a `.env`
+file. These are still the Ktuvit ones and will be replaced when the OpenSubtitles
+client lands:
 
 ```
 KTUVIT_USER_EMAIL=your.ktuvit.user.email.address
 KTUVIT_USER_HASHED_PASSWORD=your.ktuvit.user.hashed.password
 ```
-Ktuvit hashes your password and uses it for authentication. This is required to make calls to Ktuvit.
-If you're wondering what's your Ktuvit user's hashed password, CaTzil created a [guide](https://github.com/XBMCil/service.subtitles.ktuvit/blob/master/README.md) explaining how to get it.
 
-After setting the variables you can run:
+Then run:
+
 ```bash
 npm run start
 
@@ -45,6 +53,12 @@ npm run devStart
 ```
 
 and the addon will be available on: `http://localhost:3000/`
+
+```bash
+npm test      # unit and e2e tests
+npm run lint  # eslint and prettier
+npm run fix   # fix what can be fixed automatically
+```
 
 #### Additional environment variables
 
@@ -61,17 +75,17 @@ SUBS_CACHE_EMPTY_TTL_MS   # How long to keep an empty result. defaults to 300000
 #### Logging
 
 Requests are logged by [morgan](https://github.com/expressjs/morgan) at the `http`
-level, and every call to the Ktuvit manager logs its arguments at the `info` level.
-Response bodies are never logged, so a subtitle request shows up as the request
-itself plus its status, never the contents of the SRT file.
+level, and every call to the subtitles provider logs its arguments at the `info`
+level. Response bodies are never logged, so a subtitle request shows up as the
+request itself plus its status, never the contents of the SRT file.
 
 `LOG_LEVEL` controls how much of this you see:
 
 | `LOG_LEVEL` | What you get |
 | --- | --- |
-| `info` | Ktuvit calls and errors, no request logs |
+| `info` | Provider calls and errors, no request logs |
 | `http` (default) | The above, plus a line per request |
-| `debug` | The above, plus the results of each Ktuvit call |
+| `debug` | The above, plus the results of each provider call |
 
 #### Caching
 
@@ -86,18 +100,11 @@ not up yet rather than that the title will never have any. Failed requests are
 never cached. The cache is per process, so it starts empty after a restart.
 
 # Contributing
-PRs are more than welcome!
-Take a look at the currently open [issues](https://github.com/maormagori/ktuvit-stremio/issues) to see where you can help. If you're experiencing issues with the addon, be sure to open an issue.
 
-This addon relies on a wrapper I wrote for Ktuvit which also needs some attention so if you can't find a way to help here, take a look at the [Ktuvit API repo](https://github.com/maormagori/Ktuvit-api).
-
-# Supporting
-
-Hey, if you're already here, consider starring this repository on Github 🌟
-
-If you really want to show support, I have a [Buy Me Coffee](https://www.buymeacoffee.com/maormagori) page where you can drop a few shekels (Kidding, they only accept USD 😠).
-
-And it's always a great ego booster to hear some positive feedback so just reach out.
+PRs are welcome. Take a look at the open [issues](https://github.com/niroosh1997/heb-opensubtitles-stremio/issues)
+to see where you can help, and open one if you hit a problem.
 
 # License
-[MIT](https://github.com/maormagori/ktuvit-stremio/blob/main/LICENSE)
+
+[MIT](https://github.com/niroosh1997/heb-opensubtitles-stremio/blob/main/LICENSE),
+inherited from the original project. The original copyright notice is kept intact.
