@@ -143,8 +143,20 @@ describe("downloadSubtitle", function () {
   });
 
   it("should answer 429 when the daily quota is used up", async function () {
+    // The rejection is shaped like the one their error codes page documents,
+    // so the 406 in the route stays pinned to a real response rather than to
+    // a bare number nobody can check.
     const rejection = Object.assign(new Error("no quota"), {
-      response: { status: 406 },
+      response: {
+        status: 406,
+        data: {
+          requests: 21,
+          remaining: -1,
+          message:
+            "You have downloaded your allowed 20 subtitles for 24h.Your quota will be renewed in 23 hours and 57 minutes (2022-01-30 06:00:53 UTC) ",
+          reset_time_utc: "2022-01-30T06:00:53.000Z",
+        },
+      },
     });
     const { downloadSubtitle } = load({
       requestDownloadLink: sinon.stub().rejects(rejection),
@@ -154,6 +166,10 @@ describe("downloadSubtitle", function () {
     await downloadSubtitle(req, res);
 
     assert.ok(res.status.calledWith(429));
+    assert.ok(
+      !res.status.calledWith(502),
+      "A spent quota must not read as a generic failure"
+    );
     assert.strictEqual(headerSetTo(res, "Cache-Control"), "no-store");
   });
 
