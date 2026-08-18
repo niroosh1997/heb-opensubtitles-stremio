@@ -17,5 +17,6 @@
     "sessionTtlMs": 82800000,
     "languages": "he",
     "rejectedTtlMs": 300000
-  }
+  },
+  "srtCacheMaxAgeSeconds": 86400
 }
