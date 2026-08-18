@@ -84,6 +84,8 @@ OPENSUBTITLES_SESSION_TTL_MS  # how long a session lasts. defaults to 23 hours
 SUBS_CACHE_MAX_ENTRIES        # How many titles to keep cached. defaults to 500
 SUBS_CACHE_FOUND_TTL_MS       # How long to keep a subtitles list. defaults to 1 hour
 SUBS_CACHE_EMPTY_TTL_MS       # How long to keep an empty result. defaults to 5 minutes
+DOWNLOAD_FAILURE_CACHE_TTL_MS      # How long a failed download is remembered. defaults to 30 seconds
+DOWNLOAD_FAILURE_CACHE_MAX_ENTRIES # How many failed downloads to remember. defaults to 500
 ```
 
 #### Sessions
@@ -124,6 +126,16 @@ downloading is per user, and downloads are never cached.
 An empty result is kept only briefly, since it usually means the subtitles are
 not up yet rather than that the title will never have any. Failed requests are
 never cached. The cache is per process, so it starts empty after a restart.
+
+A failed download is the one thing worth remembering about a failure. Stremio
+asks for a subtitle that would not load around sixteen times in three seconds,
+and since a downloaded file is never cached when it fails, each of those retries
+used to spend another call on OpenSubtitles. The fact that a download failed, and
+the status it failed with, is therefore kept for thirty seconds and the retries
+are answered from that. Never the response body: a bad answer cached is a bad
+answer served. It is remembered per account as well as per file, so a quota that
+has run out refuses that user and nobody else, and it is dropped the moment the
+file is served successfully.
 
 ## Deploying
 

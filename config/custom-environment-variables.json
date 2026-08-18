@@ -25,5 +25,9 @@
   "subtitleFileCache": {
     "maxBytes": "SUBTITLE_FILE_CACHE_MAX_BYTES",
     "ttlMs": "SUBTITLE_FILE_CACHE_TTL_MS"
+  },
+  "downloadFailureCache": {
+    "maxEntries": "DOWNLOAD_FAILURE_CACHE_MAX_ENTRIES",
+    "ttlMs": "DOWNLOAD_FAILURE_CACHE_TTL_MS"
   }
 }

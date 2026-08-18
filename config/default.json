@@ -22,5 +22,9 @@
   "subtitleFileCache": {
     "maxBytes": 33554432,
     "ttlMs": 21600000
+  },
+  "downloadFailureCache": {
+    "maxEntries": 500,
+    "ttlMs": 30000
   }
 }

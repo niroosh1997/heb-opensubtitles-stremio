@@ -1,5 +1,6 @@
 const openSubtitles = require("../clients/openSubtitles");
 const subtitleFileCache = require("../common/subtitleFileCache");
+const downloadFailures = require("../common/downloadFailureCache");
 const config = require("config");
 const logger = require("../common/logger");
 
@@ -9,6 +10,19 @@ const MAX_AGE_SECONDS = Number(config.get("srtCacheMaxAgeSeconds"));
 // timestamp line is required before anything is served as one.
 const SRT_TIMESTAMP_PATTERN =
   /\d{2}:\d{2}:\d{2},\d{3}\s*-->\s*\d{2}:\d{2}:\d{2},\d{3}/;
+
+// The reason travels on the error itself rather than in its wording, so that
+// rewording the message cannot quietly send it down a different branch.
+const invalidSrtError = () =>
+  Object.assign(new Error("OpenSubtitles did not return a valid SRT file."), {
+    code: "INVALID_SRT",
+  });
+
+const recentFailureError = (status) =>
+  Object.assign(new Error("This download failed moments ago."), {
+    code: "RECENT_FAILURE",
+    status,
+  });
 
 const downloadSubtitle = async (req, res) => {
   const fileId = req.params?.fileId;
@@ -26,16 +40,24 @@ const downloadSubtitle = async (req, res) => {
     return;
   }
 
+  const sendError = (status) => {
+    // Never let a failed fetch be cached (by Cloudflare or anyone else) as if
+    // it were a valid subtitle file.
+    res.setHeader("Cache-Control", "no-store");
+    res.status(status).send("Could not fetch the subtitle file.");
+  };
+
   const respondWithError = (err, description, status = 502) => {
     logger.error(err || new Error(description), {
       fileId,
       username,
       description,
     });
-    // Never let a failed fetch be cached (by Cloudflare or anyone else) as if
-    // it were a valid subtitle file.
-    res.setHeader("Cache-Control", "no-store");
-    res.status(status).send("Could not fetch the subtitle file.");
+    // Remembered so the dozen retries Stremio is about to send do not each ask
+    // OpenSubtitles the question it has just answered. Only the status is kept,
+    // never a body.
+    downloadFailures.remember(fileId, req.userConfig, status);
+    sendError(status);
   };
 
   try {
@@ -45,6 +67,14 @@ const downloadSubtitle = async (req, res) => {
     const session = await openSubtitles.login(req.userConfig);
 
     const content = await subtitleFileCache.getOrFetch(fileId, async () => {
+      // Consulted only once the file cache has missed, so a file that has since
+      // been downloaded successfully is still served rather than refused for
+      // the rest of the memory's life.
+      const failedStatus = downloadFailures.recall(fileId, req.userConfig);
+      if (failedStatus !== undefined) {
+        throw recentFailureError(failedStatus);
+      }
+
       logger.info("Requesting subtitle download from OpenSubtitles.", {
         fileId,
         username,
@@ -56,11 +86,15 @@ const downloadSubtitle = async (req, res) => {
       // Validated before it is cached, so one bad answer cannot become every
       // viewer's subtitle until it expires.
       if (!SRT_TIMESTAMP_PATTERN.test(fetched || "")) {
-        throw new Error("OpenSubtitles did not return a valid SRT file.");
+        throw invalidSrtError();
       }
 
       return fetched;
     });
+
+    // Whatever failed before plainly works now, so the memory of it goes rather
+    // than standing in the way of the next request that misses the file cache.
+    downloadFailures.forget(fileId, req.userConfig);
 
     logger.debug("Serving SRT file.", {
       fileId,
@@ -72,6 +106,19 @@ const downloadSubtitle = async (req, res) => {
     res.send(Buffer.from(content));
   } catch (err) {
     const status = err.response?.status;
+
+    // Answered from the memory of a failure seconds ago: nothing was asked of
+    // OpenSubtitles, so there is nothing new to record and nothing to shout
+    // about in the logs.
+    if (err.code === "RECENT_FAILURE") {
+      logger.debug("Refusing a download that just failed.", {
+        fileId,
+        username,
+        status: err.status,
+      });
+      sendError(err.status);
+      return;
+    }
 
     // A rejected login is worth forgetting, otherwise a stale session keeps
     // being reused until it expires on its own.
@@ -86,7 +133,7 @@ const downloadSubtitle = async (req, res) => {
       return;
     }
 
-    if (/valid SRT/.test(err.message)) {
+    if (err.code === "INVALID_SRT") {
       respondWithError(err, "OpenSubtitles did not return a valid SRT file.");
       return;
     }
