@@ -1,4 +1,5 @@
 const config = require("config");
+const { addonBaseUrl } = require("../common/addonUrl");
 const PACKAGE_VERSION = require("../package.json").version;
 
 const CONFIG_FIELDS = [
@@ -37,8 +38,15 @@ const configuredManifest = () => {
   return manifest;
 };
 
+// The logo is served by the addon itself, so there is no third party left to
+// take it down or rate limit it.
+const withLogo = (manifest) => ({
+  ...manifest,
+  logo: `${addonBaseUrl()}/logo.png`,
+});
+
 const serveManifest = (req, res) => {
-  res.send(req.userConfig ? configuredManifest() : MANIFEST);
+  res.send(withLogo(req.userConfig ? configuredManifest() : MANIFEST));
 };
 
 module.exports = { serveManifest, MANIFEST, configuredManifest };

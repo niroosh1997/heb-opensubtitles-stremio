@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8b6bff"/>
+      <stop offset="1" stop-color="#5b3fd1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="url(#bg)"/>
+
+  <!-- cat head: ears then face -->
+  <g fill="#ffffff">
+    <path d="M132 178 L150 78 L236 140 Z"/>
+    <path d="M380 178 L362 78 L276 140 Z"/>
+    <ellipse cx="256" cy="228" rx="132" ry="116"/>
+  </g>
+
+  <!-- inner ears -->
+  <g fill="#7b5bf2">
+    <path d="M156 166 L166 110 L212 146 Z"/>
+    <path d="M356 166 L346 110 L300 146 Z"/>
+  </g>
+
+  <!-- eyes, closed and content -->
+  <g fill="none" stroke="#3d2a80" stroke-width="13" stroke-linecap="round">
+    <path d="M196 212 q22 22 44 0"/>
+    <path d="M272 212 q22 22 44 0"/>
+  </g>
+
+  <!-- nose and mouth -->
+  <path d="M246 250 l20 0 l-10 13 z" fill="#3d2a80"/>
+  <g fill="none" stroke="#3d2a80" stroke-width="9" stroke-linecap="round">
+    <path d="M256 264 q-16 18 -30 4"/>
+    <path d="M256 264 q16 18 30 4"/>
+  </g>
+
+  <!-- whiskers -->
+  <g stroke="#3d2a80" stroke-width="8" stroke-linecap="round" opacity="0.75">
+    <path d="M150 236 h48"/><path d="M152 262 h46"/>
+    <path d="M362 236 h-48"/><path d="M360 262 h-46"/>
+  </g>
+
+  <!-- subtitle lines, the reason the addon exists -->
+  <g fill="#ffffff" opacity="0.95">
+    <rect x="118" y="382" width="276" height="26" rx="13"/>
+    <rect x="166" y="428" width="180" height="26" rx="13"/>
+  </g>
+</svg>

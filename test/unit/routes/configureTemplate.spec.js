@@ -42,3 +42,42 @@ describe("configureTemplate", function () {
     assert.match(page, /keep it to yourself/i);
   });
 });
+
+describe("manifest logo and contact", function () {
+  const sinon = require("sinon");
+  const proxyquire = require("proxyquire").noCallThru();
+
+  const load = () =>
+    proxyquire("../../../routes/manifest", {
+      config: { get: () => "niroosh1997@gmail.com" },
+      "../common/addonUrl": { addonBaseUrl: () => "https://addon.example.com" },
+    });
+
+  it("should point the logo at the addon itself", function () {
+    // Served by the addon so there is no third party left to take it down; the
+    // project this was copied from hotlinked its logo from a wordpress cdn.
+    const { serveManifest } = load();
+    const res = { send: sinon.spy() };
+
+    serveManifest({}, res);
+
+    assert.strictEqual(
+      res.send.firstCall.args[0].logo,
+      "https://addon.example.com/logo.png"
+    );
+  });
+
+  it("should carry a contact address that is not a placeholder", function () {
+    const { serveManifest } = load();
+    const res = { send: sinon.spy() };
+
+    serveManifest({}, res);
+
+    const { contactEmail } = res.send.firstCall.args[0];
+    assert.ok(contactEmail.includes("@"));
+    assert.ok(
+      !/set\.me|example\.com/.test(contactEmail),
+      `Placeholder shipped to every installer: ${contactEmail}`
+    );
+  });
+});
