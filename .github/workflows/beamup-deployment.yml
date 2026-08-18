@@ -30,16 +30,16 @@ jobs:
           ssh-keyscan -H a.baby-beamup.club >> ~/.ssh/known_hosts
       - name: Add beamup remote repository
         run: git remote add beamup ${{ vars.BEAMUP_REPO }}
-      - name: Create env variables
-        env:
-          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
-          ADDON_HOSTNAME: ${{ vars.ADDON_HOSTNAME }}
-        run: |
-          ssh dokku@a.baby-beamup.club config:set --no-restart ${{ vars.BEAMUP_APP }} OPENSUBTITLES_API_KEY="$OPENSUBTITLES_API_KEY"
-          ssh dokku@a.baby-beamup.club config:set --no-restart ${{ vars.BEAMUP_APP }} HOSTNAME="$ADDON_HOSTNAME"
       - name: Deploy addon to beamup
         run: |
           git config user.name "github-cd"
           git config user.email "cd@github.com"
           git commit --allow-empty -m "Beamup empty auto commit"
           git push beamup HEAD:master --force
+      - name: Create env variables
+        env:
+          OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
+          ADDON_HOSTNAME: ${{ vars.ADDON_HOSTNAME }}
+        run: |
+          ssh dokku@a.baby-beamup.club config:set ${{ vars.BEAMUP_APP }} OPENSUBTITLES_API_KEY="$OPENSUBTITLES_API_KEY"
+          ssh dokku@a.baby-beamup.club config:set ${{ vars.BEAMUP_APP }} HOSTNAME="$ADDON_HOSTNAME"
