@@ -20,5 +20,6 @@
     "sessionTtlMs": "OPENSUBTITLES_SESSION_TTL_MS",
     "languages": "OPENSUBTITLES_LANGUAGES",
     "rejectedTtlMs": "OPENSUBTITLES_REJECTED_TTL_MS"
-  }
+  },
+  "srtCacheMaxAgeSeconds": "SRT_CACHE_MAX_AGE_SECONDS"
 }

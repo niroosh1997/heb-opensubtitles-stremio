@@ -25,6 +25,7 @@ const load = (overrides = {}) => {
 };
 
 const makeRes = () => ({
+  set: sinon.spy(),
   setHeader: sinon.spy(),
   end: sinon.spy(),
   status: sinon.stub().returnsThis(),
@@ -33,6 +34,13 @@ const makeRes = () => ({
 
 const req = { params: { fileId: "111" }, userConfig: USER_CONFIG };
 
+const headerSetTo = (res, name) => {
+  const call = [...res.set.getCalls(), ...res.setHeader.getCalls()]
+    .reverse()
+    .find((c) => c.args[0].toLowerCase() === name.toLowerCase());
+  return call?.args[1];
+};
+
 describe("downloadSubtitle", function () {
   it("should serve the subtitle as a utf-8 buffer", async function () {
     const { downloadSubtitle } = load();
@@ -40,7 +48,7 @@ describe("downloadSubtitle", function () {
 
     await downloadSubtitle(req, res);
 
-    const [buffer] = res.end.firstCall.args;
+    const [buffer] = res.send.firstCall.args;
     assert.ok(Buffer.isBuffer(buffer));
     assert.strictEqual(buffer.toString("utf8"), SRT);
     assert.ok(
@@ -49,6 +57,30 @@ describe("downloadSubtitle", function () {
         "application/x-subrip; charset=utf-8"
       )
     );
+  });
+
+  it("should fingerprint the response with the file id", async function () {
+    const { downloadSubtitle } = load();
+    const res = makeRes();
+
+    await downloadSubtitle(req, res);
+
+    assert.ok(res.set.calledWith("ETag", '"os-111"'));
+    assert.match(headerSetTo(res, "Cache-Control"), /max-age=\d+/);
+  });
+
+  it("should answer 304 without asking OpenSubtitles when the client has it", async function () {
+    // The contents never change for a file id, so a client holding it needs
+    // nothing fetched: no download, no wait, no call at all.
+    const { downloadSubtitle, client } = load();
+    const res = makeRes();
+
+    await downloadSubtitle({ ...req, fresh: true }, res);
+
+    assert.ok(res.status.calledWith(304));
+    assert.ok(client.login.notCalled, "A 304 must not reach OpenSubtitles");
+    assert.ok(client.requestDownloadLink.notCalled);
+    assert.ok(res.send.notCalled, "A 304 carries no body");
   });
 
   it("should spend the download against the requesting user's account", async function () {
@@ -71,9 +103,15 @@ describe("downloadSubtitle", function () {
 
     await downloadSubtitle(req, res);
 
-    assert.ok(res.setHeader.calledWith("Cache-Control", "no-store"));
+    assert.strictEqual(headerSetTo(res, "Cache-Control"), "no-store");
     assert.ok(res.status.calledWith(502));
-    assert.ok(res.end.notCalled, "Invalid content must never be served");
+    // The error path sends a message, so the check is that no body was served,
+    // not that nothing was sent at all.
+    const sent = res.send.firstCall?.args[0];
+    assert.ok(
+      !Buffer.isBuffer(sent),
+      "Invalid content must never be served as a subtitle"
+    );
   });
 
   it("should forget the session and answer 401 when the credentials are refused", async function () {
@@ -103,7 +141,7 @@ describe("downloadSubtitle", function () {
     await downloadSubtitle(req, res);
 
     assert.ok(res.status.calledWith(429));
-    assert.ok(res.setHeader.calledWith("Cache-Control", "no-store"));
+    assert.strictEqual(headerSetTo(res, "Cache-Control"), "no-store");
   });
 
   it("should never log the subtitle's contents", async function () {

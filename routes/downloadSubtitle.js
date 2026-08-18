@@ -1,5 +1,8 @@
 const openSubtitles = require("../clients/openSubtitles");
+const config = require("config");
 const logger = require("../common/logger");
+
+const MAX_AGE_SECONDS = Number(config.get("srtCacheMaxAgeSeconds"));
 
 // OpenSubtitles sometimes answers with something other than a subtitle, so a
 // timestamp line is required before anything is served as one.
@@ -9,6 +12,18 @@ const SRT_TIMESTAMP_PATTERN =
 const downloadSubtitle = async (req, res) => {
   const fileId = req.params?.fileId;
   const { username } = req.userConfig;
+
+  // A subtitle's contents never change for a given file id, so the id itself is
+  // a valid fingerprint. Setting it before anything else means a client that
+  // already has the file gets a 304 without OpenSubtitles being asked at all.
+  res.set("ETag", `"os-${fileId}"`);
+  res.set("Cache-Control", `public, max-age=${MAX_AGE_SECONDS}`);
+
+  if (req.fresh) {
+    logger.debug("Subtitle already held by the client.", { fileId });
+    res.status(304).end();
+    return;
+  }
 
   const respondWithError = (err, description, status = 502) => {
     logger.error(err || new Error(description), {
@@ -45,7 +60,7 @@ const downloadSubtitle = async (req, res) => {
     });
 
     res.setHeader("Content-Type", "application/x-subrip; charset=utf-8");
-    res.end(Buffer.from(content));
+    res.send(Buffer.from(content));
   } catch (err) {
     const status = err.response?.status;
 
