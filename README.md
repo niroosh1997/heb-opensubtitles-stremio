@@ -125,6 +125,34 @@ An empty result is kept only briefly, since it usually means the subtitles are
 not up yet rather than that the title will never have any. Failed requests are
 never cached. The cache is per process, so it starts empty after a restart.
 
+## Deploying
+
+The addon deploys to [BeamUp](https://github.com/Stremio/beamup), Stremio's free
+hosting, on every push to `main`. Before the workflow can work you need to create
+the app and tell the repo about it:
+
+1. Install the CLI and register: `npm i -g beamup-cli`, then `beamup`. It uploads
+   your public SSH key and creates the app, printing a git remote and a hostname
+   like `<hash>-heb-opensubtitles-stremio.baby-beamup.club`.
+2. Add to the repository, under Settings then Secrets and variables then Actions:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| Secret | `SSH_PRIVATE_KEY` | the private key matching the one BeamUp registered |
+| Secret | `OPENSUBTITLES_API_KEY` | your OpenSubtitles consumer API key |
+| Variable | `BEAMUP_REPO` | the git remote BeamUp printed |
+| Variable | `BEAMUP_APP` | the dokku app, `<hash>/heb-opensubtitles-stremio` |
+| Variable | `ADDON_HOSTNAME` | the hostname BeamUp printed, without a scheme |
+
+`ADDON_HOSTNAME` matters more than it looks: it builds the subtitle urls handed to
+Stremio, so a wrong value gives subtitles that appear in the list and never load.
+
+## Installing in Stremio
+
+Open `https://<your-host>/configure`, enter your OpenSubtitles username and
+password, and install. The resulting url contains your credentials, so treat it as
+private.
+
 # Contributing
 
 PRs are welcome. Take a look at the open [issues](https://github.com/niroosh1997/heb-opensubtitles-stremio/issues)

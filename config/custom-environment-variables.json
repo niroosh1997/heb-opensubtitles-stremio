@@ -1,6 +1,11 @@
 {
   "addonAuthorEmail": "AUTHOR_EMAIL",
   "PORT": "PORT",
+  "HOSTNAME": "HOSTNAME",
+  "ssl": {
+    "__name": "SSL",
+    "__format": "json"
+  },
   "logLevel": "LOG_LEVEL",
   "subsCache": {
     "maxEntries": "SUBS_CACHE_MAX_ENTRIES",
