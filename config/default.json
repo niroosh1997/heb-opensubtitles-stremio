@@ -27,5 +27,6 @@
     "maxEntries": 500,
     "ttlMs": 30000
   },
-  "manifestCacheMaxAgeSeconds": 300
+  "manifestCacheMaxAgeSeconds": 300,
+  "configurePageCacheMaxAgeSeconds": 60
 }
