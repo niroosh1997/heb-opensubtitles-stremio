@@ -39,6 +39,11 @@ const STYLES = `
   .ok { color: #a2e4b8; font-size: 14px; margin-top: 4px; }
 `;
 
+const scriptFor = (manifest) =>
+  `
+  var ADDON_VERSION = ${JSON.stringify(manifest.version)};
+` + SCRIPT;
+
 const SCRIPT = `
   // Matches how the server reads it: base64url of the JSON, via UTF-8 bytes so
   // that a non-ascii username survives.
@@ -84,7 +89,12 @@ const SCRIPT = `
         }
 
         var segment = encodeConfig({ username: username, password: password });
-        var base = location.host + "/" + segment + "/manifest.json";
+        // The version rides along so that a release reaches people. The url is
+        // otherwise identical for the same credentials, and beamup pins json
+        // responses to four hours whatever the addon asks for, so without this
+        // an install made today keeps serving yesterday's manifest.
+        var base =
+          location.host + "/" + segment + "/manifest.json?v=" + ADDON_VERSION;
 
         document.getElementById("url").textContent = location.protocol + "//" + base;
         document.getElementById("install").href = "stremio://" + base;
@@ -142,7 +152,7 @@ const configureTemplate = (manifest) => `<!DOCTYPE html>
       <a class="install" id="install" href="#">Install in Stremio</a>
     </div>
   </main>
-  <script>${SCRIPT}</script>
+  <script>${scriptFor(manifest)}</script>
 </body>
 </html>`;
 

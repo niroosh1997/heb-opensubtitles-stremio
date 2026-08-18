@@ -2,7 +2,11 @@ const assert = require("assert");
 const configureTemplate = require("../../../routes/landing/configureTemplate");
 const { decode } = require("../../../common/userConfig");
 
-const MANIFEST = { name: "Hebrew OpenSubtitles", description: "Subtitles." };
+const MANIFEST = {
+  name: "Hebrew OpenSubtitles",
+  description: "Subtitles.",
+  version: "0.1.0",
+};
 
 describe("configureTemplate", function () {
   const page = configureTemplate(MANIFEST);
@@ -36,6 +40,14 @@ describe("configureTemplate", function () {
     const credentials = { username: "viewer", password: "hunter2" };
 
     assert.deepStrictEqual(decode(encodeInBrowser(credentials)), credentials);
+  });
+
+  it("should put the version in the install url", function () {
+    // The url is otherwise identical for the same credentials, and beamup pins
+    // json responses to four hours whatever the addon asks for, so a release
+    // would never reach anyone who already installed it.
+    assert.match(page, /ADDON_VERSION = "0\.1\.0"/);
+    assert.match(page, /manifest\.json\?v=" \+ ADDON_VERSION/);
   });
 
   it("should warn that the link carries the credentials", function () {
