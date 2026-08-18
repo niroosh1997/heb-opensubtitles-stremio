@@ -40,6 +40,7 @@ const loadClient = () => {
   const instance = {
     get: sinon.stub().resolves(SEARCH_RESPONSE),
     post: sinon.stub().resolves(LOGIN_RESPONSE),
+    interceptors: { response: { use: sinon.spy() } },
   };
   const axios = {
     create: sinon.stub().returns(instance),
@@ -92,6 +93,17 @@ describe("openSubtitles login", function () {
     const { headers } = axios.create.firstCall.args[0];
     assert.strictEqual(headers["Api-Key"], "test-api-key");
     assert.ok(headers["User-Agent"], "A user agent is required by the API");
+  });
+
+  it("should ask for json explicitly, or the edge blocks the request", async function () {
+    // Axios defaults to "application/json, text/plain, */*", which
+    // OpenSubtitles answers with a 503 html page rather than the api's json.
+    const { client, axios } = loadClient();
+
+    await client.login(CREDENTIALS);
+
+    const { headers } = axios.create.firstCall.args[0];
+    assert.strictEqual(headers.Accept, "application/json");
   });
 
   it("should reuse the session instead of logging in again", async function () {
