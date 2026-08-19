@@ -5,6 +5,7 @@ const { addonBaseUrl } = require("../common/addonUrl");
 const logger = require("../common/logger");
 const config = require("config");
 const { distance } = require("fastest-levenshtein");
+const { familyOfFilename, matchTier } = require("../common/frameRate");
 
 const LANGUAGES = config.get("openSubtitles.languages");
 const imdbIDRegex = /^tt\d{7,9}$/;
@@ -96,32 +97,51 @@ const fetchSubsMiddleware = async (req, res, next) => {
 const formatSubs = (req, res) => {
   // Definition for a Stremio sub file can found here: https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/api/responses/subtitles.md
   const stremioSubs = {
-    subtitles: req.subs.map((sub) => ({
+    subtitles: rankSubs(req.subs, req?.title?.filename).map((sub) => ({
       id: `[OS]${sub.fileName || sub.release}`,
       lang: sub.language || "heb",
       url: formatSrtUrl(req.params.userConfig, sub.fileId),
     })),
   };
 
-  sortSubsByFilename(stremioSubs, req?.title?.filename);
   res.send(stremioSubs);
 };
 
 const formatSrtUrl = (userConfig, fileId) =>
   `${addonBaseUrl()}/${userConfig}/srt/${fileId}.srt`;
 
-const sortSubsByFilename = (stremioSubsArray, titleFilename) => {
+const nameOf = (sub) => sub.fileName || sub.release || "";
+
+// Frame rate decides the order and the name only breaks ties within it. A
+// subtitle timed against the wrong rate drifts further apart the longer the
+// video runs and no fixed delay puts it right, while a name belonging to
+// another release of the same rate is usually a second or two out at worst.
+// Sorting a copy keeps the array the cache handed over in its own order.
+const rankSubs = (subs, titleFilename) => {
   if (!titleFilename) {
     logger.debug("No filename was found. Returning unsorted subtitles array.");
-    return;
+    return subs;
   }
 
-  stremioSubsArray.subtitles.sort((firstSub, secondSub) => {
-    return (
-      distance(titleFilename, firstSub.id.replace("[OS]", "")) -
-      distance(titleFilename, secondSub.id.replace("[OS]", ""))
-    );
+  const videoFrameRate = familyOfFilename(titleFilename);
+
+  logger.debug("Ranking subtitles.", {
+    videoFrameRate: videoFrameRate || "unknown",
+    subs: subs.length,
   });
+
+  return [...subs]
+    .map((sub) => ({
+      sub,
+      frameRateTier: matchTier(videoFrameRate, sub.fps),
+      nameDistance: distance(titleFilename, nameOf(sub)),
+    }))
+    .sort(
+      (first, second) =>
+        first.frameRateTier - second.frameRateTier ||
+        first.nameDistance - second.nameDistance
+    )
+    .map(({ sub }) => sub);
 };
 
 module.exports = { extractTitleInfo, fetchSubsMiddleware, formatSubs };

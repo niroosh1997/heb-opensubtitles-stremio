@@ -155,14 +155,31 @@ const search = async (title, session) => {
     headers: session ? { Authorization: `Bearer ${session.token}` } : {},
   });
 
-  return (data.data || []).flatMap((result) =>
-    (result.attributes?.files || []).map((file) => ({
+  return (data.data || []).flatMap((result) => {
+    const files = result.attributes?.files || [];
+
+    // A subtitle split across CDs was timed for a video split the same way, so
+    // its second half starts again from zero against the single file Stremio
+    // plays. Neither half can be in sync, and listing them only offers a
+    // choice that cannot work.
+    if (files.length > 1) {
+      logger.debug("Skipping a subtitle split across CDs.", {
+        release: result.attributes?.release,
+        parts: files.length,
+      });
+      return [];
+    }
+
+    return files.map((file) => ({
       fileId: file.file_id,
       fileName: file.file_name,
       release: result.attributes.release,
       language: result.attributes.language,
-    }))
-  );
+      // Carried so the list can be ordered by how well each subtitle's frame
+      // rate fits the video, which the filename on its own cannot tell.
+      fps: result.attributes.fps,
+    }));
+  });
 };
 
 // The download count is spent on this call, not on fetching the file, and the

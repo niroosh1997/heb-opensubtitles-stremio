@@ -182,3 +182,98 @@ describe("formatSubs", function () {
     assert.deepStrictEqual(res.send.firstCall.args[0], { subtitles: [] });
   });
 });
+
+describe("formatSubs ranking", function () {
+  let res;
+
+  beforeEach(function () {
+    res = { send: sinon.spy() };
+  });
+
+  // A bluray video runs at film rate, so a 25 fps subtitle drifts against it
+  // however well its name reads.
+  const BLURAY = "Freies.Land.2019.1080p.BluRay.x264-GROUP.mkv";
+
+  const named = (fileName, fps) => ({
+    fileId: 1,
+    fileName,
+    fps,
+    language: "he",
+  });
+
+  const rank = (filename, subs) => {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
+
+    formatSubs(
+      {
+        params: { userConfig: USER_CONFIG_SEGMENT },
+        subs,
+        title: { filename },
+      },
+      res
+    );
+
+    return res.send.firstCall.args[0].subtitles.map((sub) =>
+      sub.id.replace("[OS]", "")
+    );
+  };
+
+  it("should put a fitting frame rate ahead of a closer name", function () {
+    const order = rank(BLURAY, [
+      named("Freies.Land.2019.1080p.BluRay.x264-GROUP.srt", 25),
+      named("Freies.Land.2019.720p.WEB-DL.srt", 23.976),
+    ]);
+
+    assert.strictEqual(
+      order[0],
+      "Freies.Land.2019.720p.WEB-DL.srt",
+      "A 25 fps subtitle drifts apart all the way through, a mismatched name does not"
+    );
+  });
+
+  it("should order by name among subtitles of the same frame rate", function () {
+    const order = rank(BLURAY, [
+      named("Freies.Land.2019.DVDRip.XviD.srt", 23.976),
+      named("Freies.Land.2019.1080p.BluRay.x264-GROUP.srt", 23.976),
+    ]);
+
+    assert.strictEqual(
+      order[0],
+      "Freies.Land.2019.1080p.BluRay.x264-GROUP.srt",
+      "With the rate settled the closest name should win"
+    );
+  });
+
+  it("should keep an unrecorded rate ahead of one known to clash", function () {
+    const order = rank(BLURAY, [
+      named("Freies.Land.2019.1080p.BluRay.x264-GROUP.srt", 25),
+      named("Freies.Land.2019.WHOKNOWS.srt", 0),
+    ]);
+
+    assert.strictEqual(
+      order[0],
+      "Freies.Land.2019.WHOKNOWS.srt",
+      "A subtitle whose rate was never recorded may still fit; one at 25 fps will not"
+    );
+  });
+
+  it("should fall back to the name alone when the video's rate cannot be told", function () {
+    // An hdtv rip is 25 fps in Europe and 23.976 in the states, so nothing can
+    // be concluded from it and every subtitle stays on its name.
+    const order = rank("Freies.Land.2019.720p.HDTV.x264.mkv", [
+      named("Freies.Land.2019.WEB-DL.srt", 25),
+      named("Freies.Land.2019.720p.HDTV.x264.srt", 23.976),
+    ]);
+
+    assert.strictEqual(order[0], "Freies.Land.2019.720p.HDTV.x264.srt");
+  });
+
+  it("should leave the order alone when no filename was sent", function () {
+    const order = rank(undefined, [
+      named("second.srt", 25),
+      named("first.srt", 23.976),
+    ]);
+
+    assert.deepStrictEqual(order, ["second.srt", "first.srt"]);
+  });
+});
