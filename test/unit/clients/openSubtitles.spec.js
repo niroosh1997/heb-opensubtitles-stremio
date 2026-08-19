@@ -36,6 +36,26 @@ const SEARCH_RESPONSE = {
           ],
         },
       },
+      {
+        // The other half of a split release, posted on its own: a single file,
+        // with nothing but its name to say it is half a video.
+        attributes: {
+          release: "Breaking.Bad.S02E05.DVDRip.XviD",
+          language: "he",
+          fps: 25,
+          nb_cd: 1,
+          files: [{ file_id: 444, file_name: "breaking.bad.s02e05.cd2.srt" }],
+        },
+      },
+      {
+        attributes: {
+          release: "Breaking.Bad.S02E05.HDCD.Remaster",
+          language: "he",
+          fps: 23.976,
+          nb_cd: 1,
+          files: [{ file_id: 555, file_name: "breaking.bad.s02e05.hdcd.srt" }],
+        },
+      },
     ],
   },
 };
@@ -249,7 +269,7 @@ describe("openSubtitles search", function () {
 
     assert.deepStrictEqual(
       subs.map((sub) => sub.fileId),
-      [111]
+      [111, 555]
     );
     assert.strictEqual(subs[0].fileName, "breaking.bad.s02e05.he.srt");
     assert.strictEqual(subs[0].release, "Breaking.Bad.S02E05.1080p.WEB-DL");
@@ -264,6 +284,28 @@ describe("openSubtitles search", function () {
     assert.ok(
       !subs.some((sub) => [222, 333].includes(sub.fileId)),
       "Neither half of a two CD subtitle can be in sync with a single video file"
+    );
+  });
+
+  it("should drop half of a split release posted on its own", async function () {
+    const { client } = loadClient();
+
+    const subs = await client.search({ imdbID: "tt0903747", languages: "he" });
+
+    assert.ok(
+      !subs.some((sub) => sub.fileId === 444),
+      "A single file named for one CD is still only half a video"
+    );
+  });
+
+  it("should keep a name that merely contains those two letters", async function () {
+    const { client } = loadClient();
+
+    const subs = await client.search({ imdbID: "tt0903747", languages: "he" });
+
+    assert.ok(
+      subs.some((sub) => sub.fileId === 555),
+      "hdcd is a remaster, not a disc number"
     );
   });
 

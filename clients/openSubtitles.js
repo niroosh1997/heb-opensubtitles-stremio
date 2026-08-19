@@ -145,6 +145,19 @@ const searchParams = ({ imdbID, season, episode, languages }) => {
   return Object.fromEntries(Object.entries(params).sort());
 };
 
+// A subtitle for a release split across CDs is timed for a video split the same
+// way: its second half starts again from zero against the single file Stremio
+// plays, so no half of one can ever be in sync. Usually both halves arrive
+// together as one record holding two files, but a half is just as often posted
+// on its own, as a record of a single file with nothing but the name to say so.
+// The digit and the boundaries either side are what keep the pattern from
+// matching those two letters inside an ordinary word.
+const CD_PART_IN_NAME = /(^|[^a-z0-9])cd\s?\d([^a-z0-9]|$)/i;
+
+const isHalfOfASplitRelease = (files, release) =>
+  files.length > 1 ||
+  CD_PART_IN_NAME.test(files[0]?.file_name || release || "");
+
 const search = async (title, session) => {
   const params = searchParams(title);
 
@@ -158,12 +171,8 @@ const search = async (title, session) => {
   return (data.data || []).flatMap((result) => {
     const files = result.attributes?.files || [];
 
-    // A subtitle split across CDs was timed for a video split the same way, so
-    // its second half starts again from zero against the single file Stremio
-    // plays. Neither half can be in sync, and listing them only offers a
-    // choice that cannot work.
-    if (files.length > 1) {
-      logger.debug("Skipping a subtitle split across CDs.", {
+    if (isHalfOfASplitRelease(files, result.attributes?.release)) {
+      logger.debug("Skipping half of a release split across CDs.", {
         release: result.attributes?.release,
         parts: files.length,
       });

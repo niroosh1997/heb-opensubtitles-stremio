@@ -1,6 +1,6 @@
 {
   "name": "heb-opensubtitles-stremio",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "An unofficial Stremio addon for Hebrew subtitles from OpenSubtitles",
   "main": "index.js",
   "scripts": {
