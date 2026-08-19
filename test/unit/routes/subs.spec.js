@@ -277,3 +277,63 @@ describe("formatSubs ranking", function () {
     assert.deepStrictEqual(order, ["second.srt", "first.srt"]);
   });
 });
+
+describe("formatSubs ranking, case", function () {
+  // Its own res each time: two calls sharing one spy would both read the first
+  // call's arguments and compare a result against itself.
+  const rank = (filename, subs) => {
+    const { formatSubs } = loadSubs(sinon.stub().resolves([]));
+    const captured = { send: sinon.spy() };
+
+    formatSubs(
+      {
+        params: { userConfig: USER_CONFIG_SEGMENT },
+        subs,
+        title: { filename },
+      },
+      captured
+    );
+
+    return captured.send.firstCall.args[0].subtitles.map((sub) =>
+      sub.id.replace("[OS]", "")
+    );
+  };
+
+  const named = (fileName) => ({ fileId: 1, fileName, fps: 0 });
+
+  // The right release written in lower case is nine capitals away from the
+  // video's name, which is further than a wrong release that happens to be
+  // capitalised the same way.
+  const RIGHT_RELEASE_LOWER = "freies.land.2019.1080p.bluray.x264-group.srt";
+  const WRONG_RELEASE_SAME_CASE =
+    "Freies.Land.2019.1080p.BluRay.x264-GROUX.srt";
+
+  it("should not lose the right release to its capitals", function () {
+    const order = rank("Freies.Land.2019.1080p.BluRay.x264-GROUP.mkv", [
+      named(WRONG_RELEASE_SAME_CASE),
+      named(RIGHT_RELEASE_LOWER),
+    ]);
+
+    assert.strictEqual(
+      order[0],
+      RIGHT_RELEASE_LOWER,
+      "Capitals are how an uploader typed a name, not a different release"
+    );
+  });
+
+  it("should order the same however the video's own name is capitalised", function () {
+    // One release uploaded twice, typed two ways. Neither spelling is a better
+    // match than the other, so the list must not depend on which case the
+    // video's own name happens to arrive in.
+    const subs = [
+      named("freies.land.2019.1080p.bluray.x264-group.srt"),
+      named("FREIES.LAND.2019.1080P.BLURAY.X264-GROUP.SRT"),
+    ];
+
+    assert.deepStrictEqual(
+      rank("FREIES.LAND.2019.1080P.BLURAY.X264-GROUP.MKV", subs),
+      rank("freies.land.2019.1080p.bluray.x264-group.mkv", subs),
+      "The same video should rank the same list whatever case it arrives in"
+    );
+  });
+});

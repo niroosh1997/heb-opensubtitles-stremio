@@ -125,6 +125,12 @@ const rankSubs = (subs, titleFilename) => {
 
   const videoFrameRate = familyOfFilename(titleFilename);
 
+  // Compared in one case throughout. Uploaders write the same release every
+  // way round, and an edit counted per differing letter charged BluRay against
+  // bluray more than it charged a different resolution, which put a subtitle
+  // for another release ahead of the right one over nothing but capitals.
+  const loweredFilename = titleFilename.toLowerCase();
+
   logger.debug("Ranking subtitles.", {
     videoFrameRate: videoFrameRate || "unknown",
     subs: subs.length,
@@ -134,7 +140,7 @@ const rankSubs = (subs, titleFilename) => {
     .map((sub) => ({
       sub,
       frameRateTier: matchTier(videoFrameRate, sub.fps),
-      nameDistance: distance(titleFilename, nameOf(sub)),
+      nameDistance: distance(loweredFilename, nameOf(sub).toLowerCase()),
     }))
     .sort(
       (first, second) =>
