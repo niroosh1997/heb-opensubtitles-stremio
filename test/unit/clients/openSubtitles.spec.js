@@ -19,6 +19,8 @@ const SEARCH_RESPONSE = {
         attributes: {
           release: "Breaking.Bad.S02E05.1080p.WEB-DL",
           language: "he",
+          fps: 23.976,
+          nb_cd: 1,
           files: [{ file_id: 111, file_name: "breaking.bad.s02e05.he.srt" }],
         },
       },
@@ -26,9 +28,11 @@ const SEARCH_RESPONSE = {
         attributes: {
           release: "Breaking.Bad.S02E05.720p.HDTV",
           language: "he",
+          fps: 25,
+          nb_cd: 2,
           files: [
-            { file_id: 222, file_name: "part1.srt" },
-            { file_id: 333, file_name: "part2.srt" },
+            { file_id: 222, file_name: "part1.srt", cd_number: 1 },
+            { file_id: 333, file_name: "part2.srt", cd_number: 2 },
           ],
         },
       },
@@ -238,19 +242,37 @@ describe("openSubtitles search", function () {
     assert.deepStrictEqual(keys, keys.slice().sort());
   });
 
-  it("should flatten every file of every result", async function () {
+  it("should return a subtitle that arrives as a single file", async function () {
     const { client } = loadClient();
 
     const subs = await client.search({ imdbID: "tt0903747", languages: "he" });
 
     assert.deepStrictEqual(
       subs.map((sub) => sub.fileId),
-      [111, 222, 333],
-      "A subtitle with two files should yield two entries"
+      [111]
     );
     assert.strictEqual(subs[0].fileName, "breaking.bad.s02e05.he.srt");
     assert.strictEqual(subs[0].release, "Breaking.Bad.S02E05.1080p.WEB-DL");
     assert.strictEqual(subs[0].language, "he");
+  });
+
+  it("should drop a subtitle split across CDs", async function () {
+    const { client } = loadClient();
+
+    const subs = await client.search({ imdbID: "tt0903747", languages: "he" });
+
+    assert.ok(
+      !subs.some((sub) => [222, 333].includes(sub.fileId)),
+      "Neither half of a two CD subtitle can be in sync with a single video file"
+    );
+  });
+
+  it("should carry the frame rate the subtitle was timed against", async function () {
+    const { client } = loadClient();
+
+    const subs = await client.search({ imdbID: "tt0903747", languages: "he" });
+
+    assert.strictEqual(subs[0].fps, 23.976);
   });
 
   it("should return an empty list when there are no results", async function () {
