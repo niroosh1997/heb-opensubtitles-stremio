@@ -1,8 +1,10 @@
 # Claude reviews every pull request against the standards in CLAUDE.md.
 #
-# The job is skipped, rather than failed, when ANTHROPIC_API_KEY is absent, so a
-# repository without the secret still gets a green run instead of a red one that
-# says nothing about the code.
+# The job is skipped when no credential is configured, so a repository without
+# one gets a green run rather than a red one that says nothing about the code.
+#
+# It also never fails the check. A review is advice and the tests are the gate,
+# so an outage on the review side must not be able to hold up a merge.
 
 name: Claude Review
 
@@ -14,19 +16,24 @@ jobs:
   review:
     name: Review
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
       id-token: write
     steps:
-      - name: Check for the api key
+      # Either credential will do. A Pro or Max subscription issues the oauth
+      # token with `claude setup-token`, which bills the review to the
+      # subscription rather than to separate api credit.
+      - name: Check for a credential
         id: guard
         env:
+          OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          if [ -z "$KEY" ]; then
+          if [ -z "$OAUTH" ] && [ -z "$KEY" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::ANTHROPIC_API_KEY is not set, so the review was skipped."
+            echo "::notice::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set, so the review was skipped."
           fi
 
       # The PR branch itself, so the review reads the code as merged rather than
@@ -39,6 +46,7 @@ jobs:
       - uses: anthropics/claude-code-action@v1
         if: steps.guard.outputs.skip != 'true'
         with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           prompt: |
             REPO: ${{ github.repository }}
