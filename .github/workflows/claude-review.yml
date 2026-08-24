@@ -16,7 +16,6 @@ jobs:
   review:
     name: Review
     runs-on: ubuntu-latest
-    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
@@ -43,8 +42,12 @@ jobs:
         with:
           fetch-depth: 1
 
+      # On the step, not the job. A job level continue-on-error keeps the
+      # workflow from failing but leaves this job's own check red, which is the
+      # thing that blocks a merge.
       - uses: anthropics/claude-code-action@v1
         if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
