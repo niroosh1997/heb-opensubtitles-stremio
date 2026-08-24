@@ -1,0 +1,73 @@
+# Claude reviews every pull request against the standards in CLAUDE.md.
+#
+# The job is skipped, rather than failed, when ANTHROPIC_API_KEY is absent, so a
+# repository without the secret still gets a green run instead of a red one that
+# says nothing about the code.
+
+name: Claude Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    name: Review
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Check for the api key
+        id: guard
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANTHROPIC_API_KEY is not set, so the review was skipped."
+          fi
+
+      # The PR branch itself, so the review reads the code as merged rather than
+      # the diff alone. CLAUDE.md comes with it and is picked up automatically.
+      - uses: actions/checkout@v6
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.guard.outputs.skip != 'true'
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request. The branch is already checked out.
+
+            CLAUDE.md in the repository root records this project's invariants,
+            its known traps and its conventions. Read it first and hold the
+            change against it; a change that breaks a stated invariant is the
+            most serious thing you can find.
+
+            Beyond that, look for:
+            - Correctness in the failure case, not the happy path: empty input,
+              a rejected promise, a field the api stopped sending.
+            - Tests that cannot fail. A test whose assertion holds however the
+              code behaves is worth reporting even though the suite is green.
+            - Tests bound to the implementation, in particular a symbol exported
+              only so a spec can import it.
+            - Credentials reaching a log, a url or a cache key in cleartext.
+
+            Report a defect only with a concrete failure: real inputs and the
+            wrong result they produce. Say "unconfirmed" where you could not
+            demonstrate it. Do not pad the review; if the change is sound, say
+            so and name what you checked hardest.
+
+            Use `gh pr comment` for the overall verdict and
+            `mcp__github_inline_comment__create_inline_comment` (with
+            `confirmed: true`) for a specific line. Post GitHub comments only.
+
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
